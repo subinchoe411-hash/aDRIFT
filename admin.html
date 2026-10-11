@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>표류여행 관리</title>
+<style>
+:root{--bg:#fff;--ink:#1f2a33;--sub:#6b7782;--line:#d9dee2;--acc:#2b5d7a;--warn:#a3402f}
+@media (prefers-color-scheme:dark){:root{--bg:#15191c;--ink:#e6eaed;--sub:#8c98a1;--line:#2d353b;--acc:#7fb2cf;--warn:#d98676}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 "Noto Serif KR","Nanum Myeongjo",Georgia,serif}
+main{max-width:720px;margin:0 auto;padding:40px 16px}
+h1{font-size:22px;letter-spacing:.2em;margin:0 0 4px}h2{font-size:12px;color:var(--sub);letter-spacing:.14em;margin:28px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.sub{color:var(--sub)}.sm{font-size:12px}
+input,button{font:inherit;color:var(--ink);background:none;border:1px solid var(--line);padding:5px 10px}
+button{cursor:pointer}button:hover{border-color:var(--acc);color:var(--acc)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+code{font:600 15px ui-monospace,Menlo,monospace;letter-spacing:.06em}
+table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:4px 6px;border-bottom:1px dotted var(--line);font-size:13px}
+.used{color:var(--sub);text-decoration:line-through}.err{color:var(--warn)}
+#fresh code{display:block;margin:4px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>표류여행 관리</h1>
+<div class="sub sm">초대 코드를 만들고 가입자를 확인합니다. 관리자 키는 서버의 ADMIN_KEY 환경변수 값입니다.</div>
+<h2>관리자 키</h2>
+<div class="row"><input id="key" type="password" placeholder="ADMIN_KEY" autocomplete="off"><button id="go">확인</button><span id="msg" class="sm err"></span></div>
+
+<div id="panel" hidden>
+<h2>초대 코드 만들기</h2>
+<div class="row">
+  <input id="cnt" type="number" min="1" max="20" value="1" style="width:70px"> 개
+  <input id="note" placeholder="메모 (누구에게 줄 코드인지)" maxlength="40" style="flex:1;min-width:160px">
+  <input id="days" type="number" min="1" max="90" value="14" style="width:70px"> 일간 유효
+  <button id="mk">만들기</button>
+</div>
+<div id="fresh"></div>
+
+<h2>발급한 코드</h2>
+<table id="inv"></table>
+<h2>가입자</h2>
+<table id="usr"></table>
+</div>
+</main>
+<script>
+const $=i=>document.getElementById(i);
+const esc=t=>String(t==null?"":t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let KEY="";try{KEY=sessionStorage.getItem("adrift:ak")||""}catch(e){}
+const fmt=t=>t?new Date(t).toLocaleString("ko-KR",{dateStyle:"short",timeStyle:"short"}):"";
+async function api(path,body){
+  const r=await fetch(path,{method:body?"POST":"GET",headers:{"content-type":"application/json","x-admin-key":KEY},body:body?JSON.stringify(body):undefined});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||r.status);return j}
+async function load(){
+  const [a,b]=await Promise.all([api("/api/admin/invites"),api("/api/admin/users")]);
+  $("inv").innerHTML="<tr><th>코드</th><th>메모</th><th>상태</th><th></th></tr>"+a.invites.map(i=>{
+    const st=i.used_by?`${esc(i.used_by)} 가입`:i.expires<Date.now()?"만료":`~${fmt(i.expires)}`;
+    return `<tr><td class="${i.used_by?"used":""}"><code>${esc(i.code)}</code></td><td>${esc(i.note)}</td><td class="sm sub">${st}</td><td>${i.used_by||i.expires<Date.now()?"":`<button data-c="${esc(i.code)}" class="cp">복사</button> <button data-d="${esc(i.code)}">삭제</button>`}</td></tr>`}).join("");
+  $("usr").innerHTML="<tr><th>아이디</th><th>가입</th><th>마지막 접속</th></tr>"+b.users.map(u=>`<tr><td>${esc(u.username)}</td><td class="sm sub">${fmt(u.created)}</td><td class="sm sub">${fmt(u.lastSeen)}</td></tr>`).join("")}
+async function enter(){$("msg").textContent="";try{await load();$("panel").hidden=false;try{sessionStorage.setItem("adrift:ak",KEY)}catch(e){}}catch(e){$("panel").hidden=true;$("msg").textContent=e.message}}
+$("go").onclick=()=>{KEY=$("key").value;enter()};
+$("key").onkeydown=e=>{if(e.key==="Enter")$("go").click()};
+$("mk").onclick=async()=>{try{const r=await api("/api/admin/invites",{count:+$("cnt").value||1,note:$("note").value,days:+$("days").value||14});
+  $("fresh").innerHTML=r.codes.map(c=>`<code>${esc(c)}</code>`).join("");$("note").value="";await load()}catch(e){$("msg").textContent=e.message}};
+$("inv").onclick=async e=>{const c=e.target.dataset.c,d=e.target.dataset.d;
+  if(c){try{await navigator.clipboard.writeText(c);e.target.textContent="복사됨"}catch(x){prompt("코드",c)}}
+  if(d&&confirm(d+" 코드를 지울까요?")){await api("/api/admin/invites/delete",{code:d});load()}};
+if(KEY){$("key").value=KEY;enter()}
+</script>
+</body>
+</html>
