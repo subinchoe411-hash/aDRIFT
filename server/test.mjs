@@ -6,7 +6,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const PORT = 3200 + Math.floor(Math.random() * 500), BASE = `http://127.0.0.1:${PORT}`, KEY = "k3y";
+const PORT = 3200 + Math.floor(Math.random() * 500), BASE = `http://127.0.0.1:${PORT}`, KEY = "k3y-test-admin-key";
 let proc;
 test.before(async () => {
   proc = spawn(process.execPath, ["server/server.js"], {

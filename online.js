@@ -60,8 +60,12 @@ setInterval(()=>{if(cloudDirty&&Date.now()-cloudAt>120000)cloudPush()},15000);
 document.addEventListener("visibilitychange",()=>{if(document.hidden)cloudPush()});
 
 /* ================= 동기화 ================= */
-let timer=0,since={},busy=false;
-function schedule(ms){clearTimeout(timer);timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:5000):ms)}
+let timer=0,since={},busy=false,lastInput=Date.now(),idle=false;
+const IDLE_MS=10*60*1000;   // 10분간 입력이 없으면 동기화를 멈춘다 (열어 둔 탭 때문에 서버가 계속 켜져 있지 않도록)
+["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,()=>{lastInput=Date.now();if(idle){idle=false;const b=$("olidle");if(b)b.hidden=true;schedule(0)}},{passive:true}));
+function schedule(ms){clearTimeout(timer);if(!O.on)return;
+  if(ms!==0&&Date.now()-lastInput>IDLE_MS){idle=true;let b=$("olidle");if(!b){b=document.createElement("div");b.id="olidle";b.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;background:var(--bg);border:1px solid var(--line);padding:6px 14px;font-size:12px";b.textContent="자리 비움 — 화면을 누르면 온라인 연결을 다시 시작합니다.";document.body.appendChild(b)}b.hidden=false;return}
+  timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:(gameOn()||O.crewMode?5000:20000)):ms)}
 O.syncNow=()=>schedule(0);
 function myState(){
   const loc=S.inC?"city":(S.isl!==null||S.dk>=0)?"port":"sea",isl=S.isl!==null?S.isl:S.dk;

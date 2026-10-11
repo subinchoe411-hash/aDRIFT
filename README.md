@@ -29,7 +29,19 @@ SQLite 파일이 남아야 하므로 **디스크(볼륨)가 붙는 곳**이어�
 - 개인 VPS에서 `node server/server.js`를 돌려도 된다.
 가격은 바뀌니 배포 전에 각 서비스의 현재 요금을 확인할 것.
 
-환경변수: `ADMIN_KEY`(필수에 가까움, 없으면 관리자 기능 꺼짐), `PORT`, `DATA_DIR`, `ENCOUNTER_RADIUS`(마주침 거리, 기본 2.5), `TRUST_PROXY=0`(프록시 뒤가 아닐 때).
+환경변수: `ADMIN_KEY`(12자 이상, 없거나 짧으면 관리자 기능 꺼짐), `PORT`, `DATA_DIR`, `ENCOUNTER_RADIUS`(마주침 거리, 기본 2.5), `TRUST_PROXY=0`(프록시 뒤가 아닐 때).
+
+### Fly.io 배포 순서
+```
+curl -L https://fly.io/install.sh | sh        # 설치 (Windows 는 공식 문서의 PowerShell 명령)
+fly auth signup                                 # 또는 fly auth login
+fly apps create 앱이름                            # fly.toml 의 app 값과 같게
+fly volumes create data --region nrt --size 1   # 계정·저장이 담길 1GB 디스크
+fly secrets set ADMIN_KEY="$(openssl rand -base64 24)"   # 값은 화면에 안 나오니 따로 저장해 두려면 직접 정해서 입력
+fly deploy --ha=false                           # 머신 1대만! (2대면 SQLite 가 갈라진다)
+```
+접속은 `https://앱이름.fly.dev`, 초대 코드는 `https://앱이름.fly.dev/admin`.
+비밀은 `fly secrets`로만 넣고 저장소·fly.toml에는 절대 적지 않는다. 전용 IPv4(`fly ips allocate-v4`)는 유료라 만들지 않는다.
 
 ### 알아 둘 점
 - 게임 계산은 각자 브라우저에서 돈다. 서버는 계정·위치·우편·거래·채팅만 맡는다. 그래서 친구끼리 노는 용도로는 충분하지만, 클라이언트를 고쳐 소지품을 속이는 걸 완전히 막지는 못한다.
