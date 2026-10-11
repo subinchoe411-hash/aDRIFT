@@ -9,7 +9,9 @@ const SESSION_TTL = 30 * DAY;
 const FRESH = 60_000;                         // 이 시간 안에 신호가 있어야 '바다에 있는' 배
 const ENC_R = Number(process.env.ENCOUNTER_RADIUS || 2.5);  // 마주침 거리 (세계 좌표 단위)
 const MAX_CREW = 4;
-const ADMIN_KEY = process.env.ADMIN_KEY || "";
+// 관리자 키가 짧으면 무차별 대입에 약하므로 12자 미만이면 관리자 기능을 아예 끈다
+const ADMIN_KEY = (process.env.ADMIN_KEY || "").length >= 12 ? process.env.ADMIN_KEY : "";
+if (process.env.ADMIN_KEY && !ADMIN_KEY) console.warn("ADMIN_KEY 가 12자보다 짧아 관리자 기능을 끕니다.");
 
 /* ---------- 준비된 쿼리 ---------- */
 const S = {
@@ -479,9 +481,9 @@ route("POST", "/api/crew/withdraw", ({ user }) => {
 });
 
 /* ---------- 관리자: 초대 코드 발급 ---------- */
-function adminAuth(req) {
-  if (!ADMIN_KEY) throw new HttpError(503, "서버에 ADMIN_KEY 가 설정되어 있지 않습니다.");
-  limit("admin:" + (req.socket.remoteAddress || ""), 60, 600_000);
+function adminAuth(req, ip) {
+  if (!ADMIN_KEY) throw new HttpError(503, "서버에 ADMIN_KEY(12자 이상)가 설정되어 있지 않습니다.");
+  limit("admin:" + ip, 30, 600_000);
   if (!safeEq(req.headers["x-admin-key"] || "", ADMIN_KEY)) throw new HttpError(401, "관리자 키가 맞지 않습니다.");
 }
 const insInvite = q("INSERT INTO invites(code,note,created,expires) VALUES(?,?,?,?)");
@@ -522,8 +524,8 @@ route("POST", "/api/admin/password", ({ body }) => {
 export function match(method, path) {
   return routes.get(method + " " + path);
 }
-export function authorize(r, req) {
-  if (r.admin) { adminAuth(req); return null; }
+export function authorize(r, req, ip) {
+  if (r.admin) { adminAuth(req, ip); return null; }
   if (r.anon) return null;
   return authUser(req);
 }
@@ -541,6 +543,9 @@ export function sweep() {
     q("DELETE FROM bottles WHERE created<?").run(t - 30 * DAY);
     q("DELETE FROM bottles WHERE finder_id IS NULL AND reply_to IS NULL AND id NOT IN (SELECT id FROM bottles WHERE finder_id IS NULL AND reply_to IS NULL ORDER BY id DESC LIMIT 2000)").run();
     q("UPDATE crew_invites SET status='cancelled' WHERE status='open' AND created<?").run(t - 3 * DAY);
+    q("DELETE FROM crew_invites WHERE status<>'open' AND created<?").run(t - 14 * DAY);
+    q("DELETE FROM trades WHERE status<>'open' AND created<?").run(t - 7 * DAY);
+    q("DELETE FROM crew_cd WHERE ready<?").run(t - DAY);
     q("DELETE FROM presence WHERE updated<?").run(t - 7 * DAY);
   } catch (e) { console.error("sweep:", e); }
 }

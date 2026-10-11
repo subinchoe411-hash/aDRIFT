@@ -1,7 +1,9 @@
-# Fly.io 로 가장 싸게 돌리는 설정: 아무도 접속하지 않으면 머신이 꺼지고, 접속하면 켜진다.
-# 먼저:  fly launch --no-deploy  →  fly volumes create data --size 1  →  fly secrets set ADMIN_KEY=원하는비밀번호  →  fly deploy
-app = "pyoryu-yeohaeng"      # 이미 쓰는 이름이면 바꾸세요
-primary_region = "nrt"
+# Fly.io 설정 — 가장 싸게, 그리고 안전하게.
+#  * 접속자가 없으면 머신이 꺼진다 (auto_stop_machines). 켜져 있는 시간만큼만 요금이 나간다.
+#  * 머신은 반드시 1대만 둔다. SQLite 파일은 볼륨 하나에 있어서 2대로 늘리면 데이터가 갈라진다.
+#  * 비밀번호(ADMIN_KEY)는 이 파일에 적지 말고 `fly secrets set` 으로만 넣는다.
+app = "pyoryu-yeohaeng"      # 이미 쓰는 이름이면 다른 이름으로 바꾸세요
+primary_region = "nrt"       # 도쿄 (서울 리전은 없음)
 
 [build]
 
@@ -12,6 +14,7 @@ primary_region = "nrt"
 [mounts]
   source = "data"
   destination = "/data"
+  initial_size = "1gb"
 
 [http_service]
   internal_port = 8080

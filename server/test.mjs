@@ -6,16 +6,17 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const PORT = 3200 + Math.floor(Math.random() * 500), BASE = `http://127.0.0.1:${PORT}`, KEY = "k3y";
+// TEST_BASE / TEST_ADMIN_KEY 를 주면 이미 떠 있는 서버(예: wrangler dev)를 시험하고, 없으면 Node 서버를 직접 띄운다.
+const PORT = 3200 + Math.floor(Math.random() * 500), BASE = process.env.TEST_BASE || `http://127.0.0.1:${PORT}`, KEY = process.env.TEST_ADMIN_KEY || "k3y-test-admin-key";
 let proc;
 test.before(async () => {
-  proc = spawn(process.execPath, ["server/server.js"], {
+  if (!process.env.TEST_BASE) proc = spawn(process.execPath, ["server/server.js"], {
     env: { ...process.env, PORT, ADMIN_KEY: KEY, REG_LIMIT: "1000", DATA_DIR: mkdtempSync(join(tmpdir(), "adrift-")) }, stdio: "ignore",
   });
-  for (let i = 0; i < 50; i++) { try { await fetch(BASE + "/api/me"); return; } catch { await new Promise((r) => setTimeout(r, 100)); } }
+  for (let i = 0; i < 100; i++) { try { await fetch(BASE + "/api/me"); return; } catch { await new Promise((r) => setTimeout(r, 200)); } }
   throw new Error("서버가 뜨지 않음");
 });
-test.after(() => proc.kill());
+test.after(() => proc && proc.kill());
 
 const call = async (path, body, tok, method) => {
   const r = await fetch(BASE + path, {
