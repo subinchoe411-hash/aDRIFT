@@ -14,7 +14,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "adrift"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "8bd2eb44-de1f-43a6-ba18-dbeca6a9bd2c"
 
 # 만료된 거래 환불, 오래된 데이터 정리
 [triggers]
