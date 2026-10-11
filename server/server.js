@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { match, authorize, sweep } from "./api.js";
 import { HttpError } from "./util.js";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "public");
 const PORT = Number(process.env.PORT || 3000);
 const TRUST_PROXY = process.env.TRUST_PROXY !== "0";
 
