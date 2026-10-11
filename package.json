@@ -1,0 +1,12 @@
+{
+  "name": "adrift-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "표류여행 다인 서버 (Node 내장 SQLite, 외부 의존성 없음)",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node server/server.js",
+    "invite": "node server/cli.js invite"
+  }
+}
