@@ -149,14 +149,15 @@ test("선원 개편: 직책, 컨디션, 일 7종, 월급 보너스", async () =>
   const inv = (await sync(mate.tok, me({ name: "선원" }))).crew.invitesIn[0];
   await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
 
-  assert.equal((await call("/api/crew/role", { role: "마법사" }, mate.tok)).status, 400, "없는 직책");
-  assert.equal((await call("/api/crew/role", { role: "요리사" }, mate.tok)).status, 200);
-  assert.equal((await call("/api/crew/role", { role: "망꾼" }, mate.tok)).status, 400, "승선 중에는 직책을 바꿀 수 없다");
+  assert.equal((await call("/api/crew/role", { role: "마법사", name: "아무개" }, mate.tok)).status, 400, "없는 직책");
+  assert.equal((await call("/api/crew/role", { role: "요리사", name: "요리왕" }, mate.tok)).status, 200);
+  assert.equal((await call("/api/crew/role", { role: "망꾼", name: "눈매" }, mate.tok)).status, 400, "승선 중에는 직책을 바꿀 수 없다");
   let s = await sync(mate.tok, me({ name: "선원" }));
   assert.equal(s.crew.me.role, "요리사");
   assert.equal(s.crew.me.cond, 100);
   let c = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0];
   assert.equal(c.role, "요리사");
+  assert.equal(c.name, "요리왕", "선장에게는 아이디가 아니라 선원 캐릭터 이름이 보인다");
   assert.equal(c.online, false, "선원 화면에 들어오기 전엔 접속 중이 아님");
   await call("/api/sync", { crew: true }, mate.tok);
   c = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0];
@@ -171,6 +172,8 @@ test("선원 개편: 직책, 컨디션, 일 7종, 월급 보너스", async () =>
   const d = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_work");
   assert.match(d.payload.fx, /^f:\d+$/);
   assert.equal(d.payload.role, "요리사");
+  assert.equal(d.payload.by, "요리왕");
+  assert.ok(d.payload.text.includes("요리왕") && !d.payload.text.includes("mate2"), "항해일지 문구에 아이디가 아닌 캐릭터 이름");
 
   // 새 일들이 모두 동작하고, 컨디션이 바닥나면 쉬어야 한다
   for (const duty of ["navigate", "haggle", "dive", "repair", "lookout", "fish"]) {
@@ -190,12 +193,12 @@ test("선원 개편: 직책, 컨디션, 일 7종, 월급 보너스", async () =>
 
   // 배에서 내리면 직책이 비워지고, 다시 탑승하면 새로 정한다
   assert.equal((await call("/api/crew/leave", {}, mate.tok)).status, 200);
-  assert.equal((await call("/api/crew/role", { role: "망꾼" }, mate.tok)).status, 400, "탑승 전에는 직책을 정할 수 없다");
+  assert.equal((await call("/api/crew/role", { role: "망꾼", name: "눈매" }, mate.tok)).status, 400, "탑승 전에는 직책을 정할 수 없다");
   await call("/api/crew/invite", { username: "mate2" }, cap.tok);
   const inv2 = (await sync(mate.tok, me({ name: "선원" }))).crew.invitesIn[0];
   await call("/api/crew/respond", { id: inv2.id, accept: true }, mate.tok);
   assert.equal((await sync(mate.tok, me({ name: "선원" }))).crew.me.role, "");
-  assert.equal((await call("/api/crew/role", { role: "망꾼" }, mate.tok)).status, 200);
+  assert.equal((await call("/api/crew/role", { role: "망꾼", name: "눈매" }, mate.tok)).status, 200);
   const mid = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0].id;
   assert.equal((await call("/api/crew/dismiss", { id: mid }, cap.tok)).status, 200);
   assert.equal((await sync(mate.tok, me({ name: "선원" }))).crew.me.role, "", "선장이 내리게 해도 직책이 비워진다");
