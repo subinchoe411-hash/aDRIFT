@@ -572,9 +572,14 @@ route("POST", "/api/crew/cancel", async ({ env, user, body }) => {
   await run(env, "UPDATE crew_invites SET status='cancelled' WHERE id=? AND status='open'", inv.id);
   return { ok: true };
 });
-route("POST", "/api/crew/leave", async ({ env, user }) => { await run(env, "DELETE FROM crew WHERE member_id=?", user.id); return { ok: true }; });
+route("POST", "/api/crew/leave", async ({ env, user }) => {
+  await env.DB.batch([P(env, "DELETE FROM crew WHERE member_id=?", user.id), P(env, "UPDATE crew_profile SET role='' WHERE user_id=?", user.id)]);
+  return { ok: true };
+});
 route("POST", "/api/crew/dismiss", async ({ env, user, body }) => {
-  await run(env, "DELETE FROM crew WHERE member_id=? AND captain_id=?", Math.floor(num(body.id, 1, 1e12, 0)), user.id);
+  const id = Math.floor(num(body.id, 1, 1e12, 0));
+  const r = await run(env, "DELETE FROM crew WHERE member_id=? AND captain_id=?", id, user.id);
+  if (changes(r) === 1) await run(env, "UPDATE crew_profile SET role='' WHERE user_id=?", id);
   return { ok: true };
 });
 route("POST", "/api/crew/duty", async ({ env, user, body }) => {
@@ -585,13 +590,13 @@ route("POST", "/api/crew/support", async ({ env, user, body }) => {
   await limit(env, "sup:" + user.id, 40, 60_000);
   return doSupport(env, user, String(body.kind || ""));
 });
+// 직책은 탑승해서 처음 한 번만 정한다. 승선 중에는 바꿀 수 없고, 배에서 내리면 비워져 다음 배에서 다시 정한다.
 route("POST", "/api/crew/role", async ({ env, user, body }) => {
   const role = String(body.role || "");
   if (!ROLES.includes(role)) throw bad("알 수 없는 직책입니다.");
+  if (!(await crewRowOf(env, user.id))) throw bad("탑승한 배가 없습니다.");
   const p = await profile(env, user.id);
-  if (p.role === role) return { ok: true, role };
-  const free = await takeCooldown(env, user.id, "role", 300_000, now());   // 처음 고를 땐 제한 없이, 그 뒤 5분 동안 바꾸기 잠김
-  if (p.role && !free) throw bad("직책은 5분에 한 번만 바꿀 수 있습니다.");
+  if (p.role) throw bad("승선 중에는 직책을 바꿀 수 없습니다. 배에서 내렸다가 다시 탑승하면 정할 수 있습니다.");
   await run(env, "UPDATE crew_profile SET role=? WHERE user_id=?", role, user.id);
   return { ok: true, role };
 });

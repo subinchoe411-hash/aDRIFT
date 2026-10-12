@@ -225,8 +225,8 @@ function build(){
  <h2>메뉴</h2><div><button onclick="Online.exitCrew()">타이틀로</button><button onclick="Online.leaveShip()">배에서 내리기</button></div><div class="sub sm">타이틀로 가도 배에는 계속 타고 있습니다.</div></div>`;
  $("tabs").innerHTML=[["deck","갑판"],["kitchen","주방"],["cabin","선원실"],["inv","소지품"]].map(([k,n])=>`<button data-t="${k}" onclick="Online.cgo('${k}')">${n}</button>`).join("");
  ["island","city","storage"].forEach(k=>$("v-"+k).hidden=true);$("bw").hidden=true;
- const h=document.querySelector("#v-deck .card h2");if(h)h.textContent="갑판 일"}
-function go(t){tab=t;["deck","kitchen","cabin","inv"].forEach(k=>$("v-"+k).hidden=k!==t);document.querySelectorAll("#tabs button").forEach(b=>b.className=b.dataset.t===t?"on":"");render()}
+ if(!$("cpick")){const d=document.createElement("div");d.id="cpick";d.hidden=true;$("rt").appendChild(d)}}
+function go(t){tab=t;document.querySelectorAll("#tabs button").forEach(b=>b.className=b.dataset.t===t?"on":"");render()}
 O.cgo=go;
 
 O.renderCrew=()=>{
@@ -235,8 +235,18 @@ O.renderCrew=()=>{
  render()};
 function render(){
  if(!O.crewMode||!O.data||!O.data.crew.memberOf||!$("csn"))return;
- side();if(tab==="deck")deck();else if(tab==="kitchen")kitchen();else if(tab==="cabin")cabin();else inv();
+ const need=!me().role;      // 직책을 정하기 전에는 직책 선택 화면만 보인다
+ $("tabs").hidden=need;$("cpick").hidden=!need;
+ ["deck","kitchen","cabin","inv"].forEach(k=>$("v-"+k).hidden=need||k!==tab);
+ side();
+ if(need){picker();timers();return}
+ if(tab==="deck")deck();else if(tab==="kitchen")kitchen();else if(tab==="cabin")cabin();else inv();
  timers()}
+function picker(){
+ const m=O.data.crew.memberOf,sh=m.ship;
+ $("cpick").innerHTML=`<div class="pan"><h2 style="margin-top:0">직책을 정하세요</h2>
+ <div class="sub sm" style="margin-bottom:8px">${esc(m.captain)} 선장의 ${esc(sh?sh.ship:"배")}에 선원으로 타기 전에 맡을 직책을 하나 정합니다. 직책에 맞는 장면 선택지는 선장이 더 유리해지고, 직책의 일은 효과와 월급이 커집니다. <b>탑승 중에는 바꿀 수 없고</b>, 바꾸려면 배에서 내렸다가 다시 탑승해야 합니다.</div>
+ ${ROLES.map(([r,ic,d])=>`<div class="row seat"><span>${ic} <b>${r}</b><br><span class="sub sm">${d}</span></span><button class="pri" onclick="Online.role('${r}')">이 직책으로 시작</button></div>`).join("")}</div>`}
 const D8=["북","북동","동","남동","남","남서","서","북서"];
 function side(){
  const m=O.data.crew.memberOf,sh=m.ship,sn=snapOf(),mm=me();
@@ -271,16 +281,22 @@ function mapSvg(sh,sn){
  if(sn.wind!=null)s+=`<g transform="translate(${VW-28},${VH-40}) rotate(${sn.wind})" stroke="var(--sub)" fill="none"><line y1="14" y2="-14"/><path d="M-4,-8 L0,-14 L4,-8"/></g><text x="${VW-28}" y="${VH-12}" font-size="8" text-anchor="middle" fill="var(--sub)">바람</text>`;
  s+=`<g transform="translate(34,36)" fill="none" stroke="var(--sub)"><circle r="17"/><circle r="13" stroke-dasharray="1 3"/><path d="M0,-15 L3,-3 L15,0 L3,3 L0,15 L-3,3 L-15,0 L-3,-3Z" fill="var(--hi)"/><path d="M0,-15 L3,-3 L-3,-3Z" fill="var(--warn)" stroke="none"/><text y="-21" font-size="9" text-anchor="middle" fill="var(--warn)" stroke="none">N</text></g>`;
  return s}
-function supBtn(arr,mm){return arr.map(([k,ic,n,d])=>{const sec=secs("sup:"+k),dis=sec>0||mm.cond<8;return `<div class="row seat"><span>${ic} ${n}<br><span class="sub sm">${d}</span></span><button data-sup="${k}" onclick="Online.support('${k}')" ${dis?"disabled":""}>${sec>0?sec+"초":"하기"}</button></div>`}).join("")}
+const cb=(label,fn,dis,pri,attr)=>`<button class="${pri?"pri":""}" ${attr||""} onclick="${fn}" ${dis?"disabled":""}>${label}</button>`;
+const gp=(t,b,h)=>`<div class="grp"><div class="gt">${t}</div>${b}${h?`<div class="sub sm" style="margin-top:2px">${h}</div>`:""}</div>`;
+const supBtns=(arr,mm)=>arr.map(([k,ic,n,d])=>{const sec=secs("sup:"+k);return cb(`${ic} ${n}${sec>0?` (${sec}초)`:""}`,`Online.support('${k}')`,sec>0||mm.cond<8,0,`data-sup="${k}" data-l="${ic} ${n}" title="${esc(d)}"`)}).join("");
+const supHelp=arr=>arr.map(x=>`${x[1]} ${x[3]}`).join(" · ");
 function deck(){
  const sh=ship(),sn=snapOf(),mm=me();
  if(sh){$("dy").innerHTML=mapSvg(sh,sn)}else $("dy").innerHTML="";
  const act=(sn.act?`<div class="sm sub" style="margin-bottom:6px">선장은 지금 <b>${esc(sn.act)}</b> 중이다.</div>`:"")+(mm.role?"":`<div class="sm" style="margin-bottom:6px;color:var(--warn)">직책이 아직 없다. 선원실 탭에서 직책을 정하면 선장이 더 유리해지고 일의 효과가 커진다.</div>`);
- $("acts").innerHTML=act+`<div class="sub sm" style="margin-bottom:6px">직책에 맞는 일(★)은 효과가 크고 월급도 더 받는다. 일마다 컨디션이 ${12} 든다.</div>`+DUTY.map(([k,ic,n,role,d])=>{const sec=secs(k),dis=sec>0||mm.cond<12,mine=mm.role===role;return `<div class="row seat"><span>${mine?"★ ":""}${ic} ${n} <span class="sub sm">${role}</span><br><span class="sub sm">${d}</span></span><button data-duty="${k}" onclick="Online.duty('${k}')" ${dis?"disabled":""}>${sec>0?sec+"초":"하기"}</button></div>`}).join("");
+ const own=DUTY.find(d=>d[3]===mm.role),rest=DUTY.filter(d=>d!==own);
+ const dbtn=d=>{const sec=secs(d[0]);return cb(`${d[1]} ${d[2]}${sec>0?` (${sec}초)`:""}`,`Online.duty('${d[0]}')`,sec>0||mm.cond<12,d===own,`data-duty="${d[0]}" data-l="${d[1]} ${d[2]}" title="${esc(d[4])}"`)};
+ const rsec=secs("rest");
+ $("acts").innerHTML=act+gp("배 위에서",(own?dbtn(own):"")+rest.map(dbtn).join(""),`${own?`<b>${own[1]} ${own[2]}</b>은(는) 내 직책(${esc(mm.role)})의 일이라 효과와 월급이 크다. `:""}일마다 컨디션이 12 든다. (단추를 길게 누르거나 올리면 설명)`)+gp("휴식",cb(`😴 해먹에서 쉬기${rsec>0?` (${rsec}초)`:""}`,"Online.rest()",rsec>0||mm.cond>=95,0,`data-rest="1" data-l="😴 해먹에서 쉬기"`)+cb("🍲 식사","Online.cgo('inv')",0));
  // 전투 / 잠수 / 장면
  const bt=$("btl"),pe=$("pend");
- if(sn.bt){const b=sn.bt;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">전투 — ${esc(b.t)} · 라운드 ${b.rd}</h2><div class="two"><div><h3>적</h3>${b.en.map(e=>`<div class="${e.hp<=0?"dead":""}"><div class="row"><span>${esc(e.n)}</span><span class="sm">${e.hp}/${e.mhp}</span></div>${bar(e.hp,e.mhp)}</div>`).join("")}</div><div><h3>아군</h3>${b.al.map(a=>`<div class="${a.hp<=0?"dead":""}"><div class="row"><span>${esc(a.n)} ${a.role?`<span class="sub sm">${esc(a.role)}</span>`:""}</span><span class="sm">${a.hp}/${a.mhp}</span></div>${bar(a.hp,a.mhp)}</div>`).join("")}</div></div><h3 style="margin-top:8px">지원 <span class="sub sm">(선장이 다음에 행동할 때 전투에 반영된다)</span></h3>${supBtn(BSUP,mm)}<div class="sub sm bt-log">${(b.log||[]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`}
- else if(sn.dv){const d=sn.dv;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">잠수 — ${esc(d.n)} · ${esc(d.z||"")}</h2><div class="row"><span>선장의 산소</span><span class="sm">${d.air} / ${d.mx}</span></div>${bar(d.air,d.mx,.3)}<div class="row"><span>선장의 체력</span><span class="sm">${d.hp} / ${d.pm}</span></div>${bar(d.hp,d.pm)}<h3 style="margin-top:8px">수면에서 줄을 잡고 있다</h3>${supBtn(DSUP,mm)}`}
+ if(sn.bt){const b=sn.bt;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">전투 — ${esc(b.t)} · 라운드 ${b.rd}</h2><div class="two"><div><h3>적</h3>${b.en.map(e=>`<div class="${e.hp<=0?"dead":""}"><div class="row"><span>${esc(e.n)}</span><span class="sm">${e.hp}/${e.mhp}</span></div>${bar(e.hp,e.mhp)}</div>`).join("")}</div><div><h3>아군</h3>${b.al.map(a=>`<div class="${a.hp<=0?"dead":""}"><div class="row"><span>${esc(a.n)} ${a.role?`<span class="sub sm">${esc(a.role)}</span>`:""}</span><span class="sm">${a.hp}/${a.mhp}</span></div>${bar(a.hp,a.mhp)}</div>`).join("")}</div></div><div style="margin-top:8px">${gp("지원",supBtns(BSUP,mm),supHelp(BSUP)+" — 선장이 다음에 행동할 때 전투에 반영된다")}</div><div class="sub sm bt-log">${(b.log||[]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`}
+ else if(sn.dv){const d=sn.dv;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">잠수 — ${esc(d.n)} · ${esc(d.z||"")}</h2><div class="row"><span>선장의 산소</span><span class="sm">${d.air} / ${d.mx}</span></div>${bar(d.air,d.mx,.3)}<div class="row"><span>선장의 체력</span><span class="sm">${d.hp} / ${d.pm}</span></div>${bar(d.hp,d.pm)}<div style="margin-top:8px">${gp("수면에서 줄을 잡고 있다",supBtns(DSUP,mm),supHelp(DSUP))}</div>`}
  else{bt.className="";bt.innerHTML=""}
  if(sn.sc){const s=sn.sc;pe.className="card pend";pe.innerHTML=`<div>${esc(s.t)}</div><div class="sub sm" style="margin:6px 0">선장이 고르는 중이다. 이쪽이 좋겠다고 귓속말을 건넬 수 있다 (맞는 직책이면 선장이 더 유리해진다).</div>`+s.o.map((o,i)=>`<button onclick="Online.advise(${i})">★ ${esc(o)}</button>`).join("")}
  else{pe.className="";pe.innerHTML=""}
@@ -290,10 +306,10 @@ function deck(){
  O.renderChat();O.hookCrewChat&&O.hookCrewChat()}
 function timers(){
  if(!O.crewMode||!O.data||!O.data.crew.me)return;const mm=me();
- document.querySelectorAll("[data-duty]").forEach(b=>{const k=b.dataset.duty,sec=secs(k);b.disabled=sec>0||mm.cond<12;b.textContent=sec>0?sec+"초":"하기"});
- document.querySelectorAll("[data-sup]").forEach(b=>{const k=b.dataset.sup,sec=secs("sup:"+k);b.disabled=sec>0||mm.cond<8;b.textContent=sec>0?sec+"초":"하기"});
- const rb=$("restb");if(rb){const sec=secs("rest");rb.disabled=sec>0||mm.cond>=95;rb.textContent=sec>0?`쉬는 중 (${sec}초)`:"해먹에서 쉬기"}
- const rl=document.querySelectorAll("[data-role]");rl.forEach(b=>{const sec=secs("role");b.disabled=sec>0&&me().role!==b.dataset.role})}
+ const lab=(b,sec)=>{const l=b.dataset.l;if(l)b.textContent=sec>0?`${l} (${sec}초)`:l};
+ document.querySelectorAll("[data-duty]").forEach(b=>{const sec=secs(b.dataset.duty);b.disabled=sec>0||mm.cond<12;lab(b,sec)});
+ document.querySelectorAll("[data-sup]").forEach(b=>{const sec=secs("sup:"+b.dataset.sup);b.disabled=sec>0||mm.cond<8;lab(b,sec)});
+ document.querySelectorAll("[data-rest]").forEach(b=>{const sec=secs("rest");b.disabled=sec>0||mm.cond>=95;lab(b,sec)})}
 
 const note=t=>{crewLog.unshift(`${stamp()} ${t}`);crewLog.length=Math.min(crewLog.length,12)};
 async function act(fn){try{await fn()}catch(e){note("⚠ "+e.message)}O.syncNow();render()}
@@ -303,7 +319,7 @@ O.duty=k=>act(async()=>{const r=await O.api("/crew/duty",{duty:k});
 O.support=k=>act(async()=>{const r=await O.api("/crew/support",{kind:k});note(`${SUPNAME[k]}${r.bonus?" (직책의 솜씨!)":""} — 선장에게 닿았다.`)});
 O.advise=i=>act(async()=>{await O.api("/crew/advise",{opt:i});note("선장에게 귓속말을 건넸다.")});
 O.rest=()=>act(async()=>{const r=await O.api("/crew/rest",{});note(r.msg);diary(r.msg)});
-O.role=r=>act(async()=>{await O.api("/crew/role",{role:r});note(`직책을 「${r}」(으)로 정했다.`)});
+O.role=r=>{if(!confirm(`「${r}」(으)로 시작할까요? 탑승 중에는 직책을 바꿀 수 없습니다.`))return;act(async()=>{await O.api("/crew/role",{role:r});note(`직책을 「${r}」(으)로 정하고 일을 시작했다.`)})};
 O.crewDeliveries=async list=>{
  const mine=(list||[]).filter(d=>d.kind==="coop_note");if(!mine.length)return;
  const got=(await O.api("/claim",{ids:mine.map(d=>d.id)})).deliveries;
@@ -339,11 +355,12 @@ function cabin(){
  const seen=(sn.seen||[]).map(i=>I[i]&&I[i].n).filter(Boolean);
  const talk=[["식사 시간입니다, 선장님. 든든히 드셔야 합니다!","🍲 식사하시죠"],["다들 지쳤습니다. 닻을 내리고 잠시 쉬어 가면 어떨까요?","😴 쉬어 가요"],["뭔가 불길한 기운이 느껴집니다. 조심하세요, 선장님!","⚠ 불길해요"],["항해가 순조롭습니다, 선장님!","👍 순조로워요"],...(seen.length?[[`근처 ${pick(seen)}에 들러 보면 어떨까요?`,"🏝 섬에 들러요"]]:[])];
  $("v-cabin").innerHTML=VHD(IC.cab,"선원실","선원들이 쉬고 짐을 두는 방 — 해먹과 사물함, 그리고 내 일지")+
- `<div class="two"><div><h2>직책</h2><div class="sub sm" style="margin-bottom:6px">직책이 맞는 선택지(장면)는 선장이 더 유리하고, 직책의 일은 효과와 월급이 커진다. 바꾸면 5분간 잠긴다.</div>${ROLES.map(([r,ic,d])=>`<div class="row seat"><span>${ic} <b>${r}</b>${mm.role===r?" ✓":""}<br><span class="sub sm">${d}</span></span><button data-role="${r}" class="${mm.role===r?"on":""}" onclick="Online.role('${r}')">${mm.role===r?"현재":"맡기"}</button></div>`).join("")}</div>
- <div><h2>컨디션</h2>${bar(mm.cond,100,.25)}<div class="row"><span class="sm">${mm.cond} / 100 (30초에 1 회복)</span><button id="restb" onclick="Online.rest()">해먹에서 쉬기</button></div>
- <h2>계급과 월급</h2><div class="row"><span>${esc(mm.rank)}</span><span class="sm">일한 횟수 ${mm.tasks||0} · 경험 ${mm.xp}${next?` / ${next}`:" (최고 계급)"}</span></div>${bar(mm.xp-RXP[ri],(next||RXP[ri]+1)-RXP[ri],0)}<div class="sub sm">계급이 오르면 쿨다운이 줄고 월급이 늘며, 전투에서 더 강한 아군이 된다. 월급은 내 항해를 시작하면 '바다 위의 사람들'에서 찾는다.</div>
+ ` <div class="two"><div><h2>직책</h2><div class="row seat"><span>${(ROLE_TXT[mm.role]||[])[1]||""} <b>${esc(mm.role)}</b><br><span class="sub sm">${esc((ROLE_TXT[mm.role]||[])[2]||"")}</span></span></div><div class="sub sm">직책은 탑승하기 전에 정한다. 바꾸려면 배에서 내렸다가 다시 탑승해야 한다.</div>
  <h2>동료</h2>${m.shipmates.map(x=>`<div class="row"><span>${esc(x.name)}${x.name===O.user.username?" (나)":""}</span><span class="sub sm">${esc(x.role||"직책 미정")}</span></div>`).join("")||"<div class='sub sm'>없음</div>"}
- <h2>선장에게 한마디</h2><div class="sub sm" style="margin-bottom:4px">선원 채팅에 대신 말해 준다.</div>${talk.map(([t,l])=>`<button onclick="Online.crewSay(${JSON.stringify(t).replace(/"/g,"&quot;")})">${l}</button>`).join("")}</div></div>
+ <h2>선장에게 한마디</h2><div class="sub sm" style="margin-bottom:4px">선원 채팅에 대신 말해 준다.</div>${talk.map(([t,l])=>`<button onclick="Online.crewSay(${JSON.stringify(t).replace(/"/g,"&quot;")})">${l}</button>`).join("")}</div>
+ <div><h2>컨디션</h2>${bar(mm.cond,100,.25)}<div class="row"><span class="sm">${mm.cond} / 100 (30초에 1 회복)</span><button data-rest="1" data-l="해먹에서 쉬기" onclick="Online.rest()">해먹에서 쉬기</button></div>
+ <h2>계급과 월급</h2><div class="row"><span>${esc(mm.rank)}</span><span class="sm">일한 횟수 ${mm.tasks||0} · 경험 ${mm.xp}${next?` / ${next}`:" (최고 계급)"}</span></div>${bar(mm.xp-RXP[ri],(next||RXP[ri]+1)-RXP[ri],0)}<div class="sub sm">계급이 오르면 쿨다운이 줄고 월급이 늘며, 전투에서 더 강한 아군이 된다. 월급은 내 항해를 시작하면 '바다 위의 사람들'에서 찾는다.</div>
+ </div></div>
  <h2>내 일지</h2><div class="lg" style="max-height:200px">${cs.diary.map(x=>`<div>${esc(x)}</div>`).join("")||"<div class='sub'>아직 적을 것이 없다.</div>"}</div>`}
 
 /* ---- 소지품 (내 보관함) ---- */
