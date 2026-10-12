@@ -102,7 +102,7 @@ button{padding:7px 11px}.vt{font-size:16px;letter-spacing:.12em}
  <h2>시간 흐름</h2><div id="spd"></div>
 <h2>저장</h2><div><button onclick="manualSave()">지금 저장</button><button onclick="resetGame()">처음부터</button></div><div id="svm" class="sub sm"></div>
 <!-- TEST-BEGIN -->
- <h2>테스트 (나중에 삭제)</h2><div id="tst"></div>
+ <div id="tstw" hidden><h2>개발자 도구</h2><div id="tst"></div></div>
 <!-- TEST-END -->
 </div></aside>
 <div id="rt">
@@ -125,7 +125,7 @@ button{padding:7px 11px}.vt{font-size:16px;letter-spacing:.12em}
 <div id="fgm" class="modal" hidden><div class="card" style="min-width:300px;max-width:380px;width:90%"><h2 style="margin-top:0">직접 낚시</h2><div id="fgt" class="sm sub" style="min-height:20px"></div><div class="fgbar"><div id="fgz"></div><div id="fgp"></div><div id="fgk"></div></div><div id="fgr" style="margin:8px 0;min-height:44px"></div><button id="fgb" class="pri" onclick="fgHit()">챔질! (스페이스)</button><button id="fga" onclick="fgAgain()" hidden>다시 던지기 (3분)</button><button onclick="fgClose()">닫기</button></div></div>
 <div id="dead" class="ov" hidden></div>
 <script>
-let rnd=()=>Math.random(); // 게임 로직의 무작위는 전부 여기로 (서버 단계에서 교체 가능)
+let rnd=()=>Math.random();
 const $=i=>document.getElementById(i),R=n=>Math.floor(rnd()*n),pick=a=>a[R(a.length)],rad=d=>d*Math.PI/180;
 const esc=t=>String(t).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const KL={fish:"낚시",exp:"탐사",vis:"시야",spd:"속력",cook:"요리",hun:"허기소모",hull:"선체방어",gold:"골드",dive:"잠수",luck:"행운"};
@@ -244,15 +244,15 @@ c2b:{dv:1,t:"신전 안쪽 제단에 유물이 놓여 있고, 바닥에는 낡�
 c3:{dv:1,t:"가라앉은 항구에 낡은 범선들이 줄지어 잠들어 있다. 가장 큰 배의 선실에서 불빛이 아직 깜빡인다.",o:[["큰 배의 선실로 들어간다",.6,"선실 책상 위에 지도와 상자가 놓여 있다.>?","선실 문이 닫혀 한참 갇혔다가 겨우 빠져나왔다.|p:-10;f:-10"],["작은 배들을 뒤진다",.8,"작은 배 바닥에서 동전 주머니를 건졌다.|g:65","녹슨 못에 손을 베었다.|p:-6"],RT]},
 c3b:{dv:1,t:"상자는 자물쇠로 잠겨 있고, 열쇠 구멍은 아주 작다.",o:[["열쇠 구멍을 억지로 연다",.5,"상자를 열자 오래된 보물이 쏟아졌다.|g:230;a;r;d","상자가 버티며 손을 다쳤다.|p:-12"],["상자를 통째로 끌고 올라간다",.6,"무거운 상자를 수면까지 끌고 올라왔다. 안은 나중에 열어 보자.|g:140;a;d","상자의 무게에 숨이 차 놓치고 말았다.|p:-12;f:-8"],RT]}};
 const RQ={정비공:["근력"],잠수부:["체력"],망꾼:["관찰"],항해사:["지력"],낚시꾼:["민첩"],상인:["매력"],요리사:["요리","cook"]};
-function hasRole(r){const q=RQ[r];if(!q)return false;return q[1]?lv(q[1])>=3:C.st[q[0]]>=5}
+function hasRole(r){const q=RQ[r];if(!q)return false;if(window.Online&&Online.crewHas&&Online.crewHas(r))return true;return q[1]?lv(q[1])>=3:C.st[q[0]]>=5}
 const roleLbl=r=>{const q=RQ[r];return q[1]?"요리 Lv3":q[0]+" 5"}
-function pendHTML(){return S.pend?`<div>${S.pend.t}</div>`+S.pend.o.map((o,i)=>`<button onclick="pp(${i})" ${o[2]?"disabled":""}>${o[0]}</button>`).join(""):""}
+function pendHTML(){return S.pend?`<div>${S.pend.t}</div>`+S.pend.o.map((o,i)=>`<button onclick="pp(${i})" ${o[2]?"disabled":""}>${o[0]}${window.Online&&Online.advMark?Online.advMark(i):""}</button>`).join(""):""}
 const nm=x=>x.replace(/\{n\}/g,S.qn||"수배자");
 function sc(id){if(!SC[id])return;const s=SC[id],g=S.gh;S.scId=id;
  const hd=(s.gh&&g?` [단서 ${g.c} · 공포 ${g.e}]`:"")+(s.dv&&S.inC?` [남은 산소 ${Math.max(0,S.air)}]`:"");
  say("— "+nm(s.t)+hd);
- S.pend={t:nm(s.t)+hd,o:s.o.map(o=>{const rl=o[4],has=rl&&(rl==="악명"?S.inf>=10:rl==="명예"?S.hon>=10:hasRole(rl));
-  return[nm(o[0])+(rl?(RQ[rl]?(has?` ✓${roleLbl(rl).split(" ")[0]}`:` · ${roleLbl(rl)}↑ 유리`):(has?` ✓${rl}`:` [${rl} 필요]`)):""),()=>{let p=1;if(o[1]<1){p=o[1]+M("luck")*.5+(has?.3:0)+(s.dv?.05+M("dive")*.5-(S.inC?S.dist*.03:0):0)+(s.gh&&g?g.c*.07-g.e*.06:0);p=Math.max(.05,Math.min(.95,p))}out(rnd()<p?o[2]:(o[3]||o[2]))}]})};
+ S.pend={t:nm(s.t)+hd,o:s.o.map((o,oi)=>{const rl=o[4],has=rl&&(rl==="악명"?S.inf>=10:rl==="명예"?S.hon>=10:hasRole(rl));
+  return[nm(o[0])+(rl?(RQ[rl]?(has?` ✓${roleLbl(rl).split(" ")[0]}${window.Online&&Online.crewWho?Online.crewWho(rl):""}`:` · ${roleLbl(rl)}↑ 유리`):(has?` ✓${rl}`:` [${rl} 필요]`)):""),()=>{let p=1;if(o[1]<1){p=o[1]+M("luck")*.5+(has?.3:0)+(window.Online&&Online.advBonus?Online.advBonus(oi):0)+(s.dv?.05+M("dive")*.5-(S.inC?S.dist*.03:0):0)+(s.gh&&g?g.c*.07-g.e*.06:0);p=Math.max(.05,Math.min(.95,p))}out(rnd()<p?o[2]:(o[3]||o[2]))}]})};
  if(S.isl===null&&!S.inC)S.view="deck";renderAll()}
 function out(r){r=nm(r);let nx="";const i=r.lastIndexOf(">");if(i>=0){nx=r.slice(i+1);r=r.slice(0,i)}const[t,f]=r.split("|");say(t+" "+fx(f||""));flush();
  if(S.gh&&S.gh.e>=4){say("공포가 한계에 이르렀다. 정신없이 배로 도망쳤다.");S.gh=null;S.pend=null;S.cur=null;return}
@@ -358,7 +358,7 @@ function small(){if(!S.sail||S.dk>=0||S.isl!==null||S.inC||S.pend||S.bt||S.view!
 Object.assign(SC,{gust:{t:"돌풍이 몰려온다! 돛이 팽팽하게 당겨지며 배가 크게 기운다.",o:[["돛을 재빨리 줄인다",1,"돛을 줄여 돌풍을 흘려보냈다.|"],["버티며 돌풍을 탄다",.5,"돌풍을 타고 순식간에 속도가 붙었다!|b:1.2","돛에서 불길한 소리가 나더니 일부가 찢어졌다.|h:8"],["방향을 틀어 돌풍을 비켜 간다",.7,"몸을 틀어 돌풍을 비켜 갔다.|","큰 파도에 갑판이 흔들렸다.|p:-4"]]}});
 const BOT=[["늙은 어부 마루","동쪽 해초밭 근처에서 큰 놈이 잡히더군. 자네도 운이 따르길.","i:멸치:2"],["항해사 리나","이 병을 줍는 이에게 행운을. 마지막 금화 한 닢을 넣는다.","g:15"],["이름 없는 선원","붉은 안개 속에서 불빛을 봤다. 절대 따라가지 마라.",""],["요리사 보리","고기와 감자와 양파를 함께 졸여 보게. 선원들이 울고 갈 맛이야.","r:1"],["꼬마 하늘","언젠가 이 병이 누군가에게 닿기를! 나는 이제 막 배를 탔어요.","m:1"],["표류자 도윤","남쪽 바다 어딘가에 가라앉은 도시가 있다고 들었다.","q:1"],["등대지기 서린","밤바다에서 길을 잃으면 가장 밝은 별을 따라가시오.",""],["해적 코르","이 병을 줍는 놈, 우리 깃발을 보면 도망쳐라. 아니면 한잔 하자.","n:1"],["상인 나래","지도에 없는 섬을 봤소. 윤곽만 그려 보내오.","s:1"],["잠수부 이솔","물밑 신전 앞에는 석등이 둘 있다. 불꽃이 꺼지기 전에 둘을 차례로 밝혀야 한다네.",""],["늙은 선장 가온","젊은이, 바다는 서두르는 자를 좋아하지 않는다. 다섯 개의 별 조각을 모으는 자에게만 전설의 섬이 열린다지.","l:1"],["어느 연인","당신이 이 병을 주웠다면, 우리의 이야기를 바다가 전한 거예요.","p:5"],["수상한 상인","비밀 거래 장소를 적어 둔다. 값은 비싸지만 물건은 진짜다.","q:1"],["병 속의 낙서","…배고파…","i:마른 빵:1"]];
 const REPLY=[["항구의 소라","병을 주웠어요! 보내 준 말이 반가웠어요. 안전한 항해를 빌어요.","g:20;m:1"],["늙은 어부 마루","자네 병이 내 그물에 걸렸네. 답례로 생선을 좀 넣어 보낸다.","i:도미:1"],["이름 모를 항해자","당신의 편지를 읽고 한참 웃었소. 먼 바다에서 또 만납시다.","m:1"],["섬의 아이들","병을 주웠어요! 그림도 같이 넣었어요. 놀러 와요!","i:산딸기:2"],["해적 코르","편지 잘 읽었다. 이건 감사의 표시다. 다음엔 한 병 사 와라.","g:25;n:1"],["수도원의 수사","당신의 말이 우리 마을 사람들에게 위로가 되었습니다.","m:2"],["상인 나래","재미있는 편지였소. 정보 하나 보내리다.","q:1"],["별 관측가","하늘이 맑은 밤, 당신의 편지를 별빛 아래에서 읽었습니다.","s:1"]];
-function sendBottle(){const t=cleanStr($("btx").value,60).trim();if(!t)return say("편지에 쓸 말이 없다.");if(S.out.filter(b=>!b.r).length>=3)return say("바다에 띄운 병이 너무 많다. 답장이 오면 다시 쓰자.");if(S.act||S.pend||S.over)return;$("btx").value="";$("bw").hidden=true;start("병 편지 쓰기",5,()=>{const on=!!(window.Online&&Online.on);S.out.push({text:t,t:clock(),due:S.t+180+R(300),r:0,srv:on?1:0});ct("sent");if(on)Online.sendBottle(t);say(on?"병 편지를 바다에 띄웠다. 다른 선장이 주워 읽을지도 모른다.":"병 편지를 바다에 띄웠다. 파도가 멀리 데려갈 것이다. (서버에 접속하면 다른 플레이어가 줍는다)")})}
+function sendBottle(){const t=cleanStr($("btx").value,60).trim();if(!t)return say("편지에 쓸 말이 없다.");if(S.out.filter(b=>!b.r).length>=3)return say("바다에 띄운 병이 너무 많다. 답장이 오면 다시 쓰자.");if(S.act||S.pend||S.over)return;$("btx").value="";$("bw").hidden=true;start("병 편지 쓰기",5,()=>{const on=!!(window.Online&&Online.on);S.out.push({text:t,t:clock(),due:S.t+180+R(300),r:0,srv:on?1:0});ct("sent");if(on)Online.sendBottle(t);say(on?"병 편지를 바다에 띄웠다. 다른 선장이 주워 읽을지도 모른다.":"병 편지를 바다에 띄웠다. 파도가 멀리 데려갈 것이다.")})}
 function mailHTML(){const m=S.mail,o=S.out.filter(b=>!b.r).length;return `<h2>병 편지함 ${m.length}통</h2>`+(o?`<div class="sub sm">띄워 보낸 병 ${o}개가 파도를 타고 있다.</div>`:"")+(m.length?m.slice(0,8).map(x=>`<div style="margin-bottom:6px"><div class="sub sm">✉ ${esc(x.from)} · ${esc(x.t)}${x.re?" (답장)":""}${x.bid&&!x.rp?` <a onclick="Online.reply(${x.bid})">답장 쓰기</a>`:""}</div><div>${esc(x.text)}</div></div>`).join(""):"<div class='sub sm'>받은 병 편지가 없다. 항해 중에 가끔 병이 떠다닌다.</div>")}
 function fishGame(){if(S.act||S.pend||S.over)return;start("낚싯줄 드리우기",3,()=>fgOpen())}
 function fgOpen(){const big=rnd()<.25+M("luck")*.3,rare=big&&rnd()<.25,zw=Math.max(12,26+M("fish")*30-(big?6:0)-(rare?4:0)+(S.man&&S.sail?4:0));S.fg={ph:"wait",pos:0,dir:1,sp:(big?2.6:1.8)*(rare?1.2:1),zc:zw/2+8+rnd()*(84-zw),zw,big,rare,tw:Date.now()+1200+rnd()*2600,tb:0};$("fgb").hidden=false;$("fga").hidden=true;$("fgr").innerHTML="";fgDraw();$("fgm").hidden=false;clearInterval(S.fgi);S.fgi=setInterval(fgTick,30)}
@@ -370,7 +370,7 @@ function fgEnd(r,m){const g=S.fg;if(!g)return;g.ph="end";clearInterval(S.fgi);ct
 function fgClose(){clearInterval(S.fgi);S.fg=null;$("fgm").hidden=true}
 function fgAgain(){fgClose();fishGame()}
 if(document.addEventListener)document.addEventListener("keydown",e=>{if(typeof S!=="undefined"&&S&&S.fg&&e.code==="Space"){e.preventDefault();fgHit()}});
-/* ---- 블랙잭 (테이블 로직은 UI와 분리: 나중에 서버에서 여러 좌석으로 확장) ---- */
+/* ---- 블랙잭 ---- */
 const BJR=["A","2","3","4","5","6","7","8","9","10","J","Q","K"],BJS=["♠","♥","♦","♣"];
 const bjVal=c=>c.r==="A"?11:"JQK".includes(c.r)?10:+c.r;
 function bjScore(cs){let v=0,a=0;cs.forEach(c=>{v+=bjVal(c);if(c.r==="A")a++});while(v>21&&a>0){v-=10;a--}return{v,soft:a>0}}
@@ -408,7 +408,7 @@ function chkGoals(){GOALS.forEach(([t,k,th,r],i)=>{if(!S.gd.has(i)&&cv(k)>=th){S
 const gprog=([t,k,th])=>th>1?` (${Math.min(th,Math.floor(cv(k)*10)/10)}/${th})`:"";
 function rGoals(){const e=$("gd"),n=S.gd.size;if(n>=GOALS.length){e.hidden=true;return}e.hidden=false;e.innerHTML=`<h2 style="margin-top:0">항해 수첩 ${n}/${GOALS.length}</h2>`+GOALS.map((g,i)=>[g,i]).filter(([g,i])=>!S.gd.has(i)).slice(0,3).map(([g])=>`<div>□ ${g[0]}<span class="sub sm">${gprog(g)}</span></div>`).join("")}
 function goalsHTML(){return `<h2>항해 수첩 ${S.gd.size}/${GOALS.length}</h2>`+GOALS.map((g,i)=>`<div class="${S.gd.has(i)?"sub":""}">${S.gd.has(i)?"■":"□"} ${g[0]}<span class="sub sm">${S.gd.has(i)?"":gprog(g)}</span></div>`).join("")}
-/* ---- 저장 / 불러오기 (브라우저 저장). ship=배의 공용 상태, captain=개인 상태 → 서버 단계에서 그대로 소유자가 갈라진다 ---- */
+/* ---- 저장 / 불러오기 (브라우저 저장). ship=배의 공용 상태, captain=개인 상태 ---- */
 const SHIP_KEYS=new Set(["t","x","y","hd","tx","ty","path","sail","man","sl","wind","ws","boost","hull","lv","sto","dk","isl","acc","acc2","spd","lk"]),SKIP=new Set(["act","pend","fg","fgi","bj","bjo","sel2","selS","sideOpen","cur","curQ","curP","curB","inC","view","bt","bld","spot","logs"]);
 let LOOP=0,ASV=0,NG=0,RG=0;
 const SAVE_KEY=()=>"voyage:"+WORLD.seed+":v1"+(window.ONLINE_UID?":u"+window.ONLINE_UID:"");
@@ -489,7 +489,7 @@ const efMod=k=>S.ef.reduce((a,e)=>a+(((EFX[e.id]||{}).m||{})[k]||0),0);
 function addEf(id,min){const d=EFX[id];if(!d)return;if(!d.g)min=Math.max(30,Math.round(min*(1-.05*(lv("med")-1))));const e=S.ef.find(x=>x.id===id),u=S.t+min;if(e)e.until=Math.max(e.until,u);else S.ef.push({id,until:u})}
 function efTick(dt){let rg=0;S.ef=S.ef.filter(e=>{if(S.t>=e.until){say("효과가 사라졌다: "+e.id);return false}rg+=(EFX[e.id]||{r:0}).r;return true});if(rg)S.hp=Math.min(hpm(),S.hp+rg*dt)}
 function efHTML(){return S.ef.map(e=>{const d=EFX[e.id];if(!d)return"";const m=Math.max(1,Math.round(e.until-S.t));return `<span class="chip ${d.g?"g":"b"}" title="${d.d}">${e.id} ${m>=60?Math.round(m/60)+"시간":m+"분"}</span>`}).join("")}
-/* ================= 턴제 전투 (시드 + 행동 기록 → 서버에서 재현·검증 가능, 통신 최소) ================= */
+/* ================= 턴제 전투 (아군 목록 b.al 에 선원이 함께 선다) ================= */
 const MON={serpent:{n:"바다뱀",en:[["바다뱀",110,13,2,"bite"]],win:"g:140;a;m:1",lose:"h:12",xp:8},crab:{n:"거대 집게게",en:[["거대 집게게",95,10,5,""]],win:"g:70;i:게:3;i:조개:2",lose:"h:8",xp:7},ghostp:{n:"유령 해적단",en:[["유령 선장",85,12,3,"boss"],["유령 선원",35,7,1,""],["유령 선원",35,7,1,""]],win:"g:160;a;m:2",lose:"g:-30;h:10",xp:11},shark:{n:"거대 상어",en:[["거대 상어",70,12,2,"bite"]],win:"g:60;i:상어 고기:2",lose:"h:6",xp:6},jelly:{n:"해파리 떼",en:[["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"]],win:"g:30",lose:"",xp:5},siren:{n:"세이렌",en:[["세이렌",80,9,1,"siren"]],win:"g:150;i:세이렌의 비늘:1;m:1",lose:"",xp:9},kraken:{n:"크라켄",en:[["크라켄",150,14,3,"kraken"],["촉수",40,8,0,"tent"],["촉수",40,8,0,"tent"]],win:"g:300;i:크라켄의 촉수:2;a;m:3",lose:"h:25",xp:16},pirates:{n:"해적선 습격",en:[["해적 두목",60,10,2,"boss"],["해적",32,6,1,""],["해적",32,6,1,""]],win:"g:90;m:3;i:커틀러스:1",lose:"g:-25;h:8",xp:10},outlaw:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"k:1;m:2",lose:"z:1",xp:10},outlawI:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"w:1;m:4",lose:"",xp:10}};
 function startBattle(key){const m=MON[key];if(!m||S.bt||S.over)return;const nm=x=>x.replace(/\{n\}/g,S.qn||"수배자"),seed=Math.floor(rnd()*1e9);
  const en=m.en.map(([n,hp,atk,def,sk])=>({n:nm(n),hp:Math.round(hp*thr()),mhp:Math.round(hp*thr()),atk:Math.round(atk*thr()*10)/10,def,sk,st:{}})),al=[{n:"나",me:1,st:{}}];
@@ -801,7 +801,7 @@ function event(){if(S.dk>=0||S.isl!==null||S.inC||S.pend)return;const h=Math.flo
  if(R(100)<(h>=22||h<4?10:6))return sc(pick(h>=22||h<4?["mk1","mk2","mk3","mk4","mk5","mk7"]:["mk1","mk3","mk4","mk5","mk6"]));
  if(R(100)<9)return sc(pick(["sn1","sn2","sn3","sn4","sn5","sn6","sn7","sn8"]));
  if(r<8){const d=Math.round((8+R(10))*Math.max(.2,1-M("hull"))*dmgM());S.hull-=d;ct("storm");say("폭풍! 파도가 선체를 때려 "+d+"만큼 상했다.")}
- else if(r<18+L)say("낯선 상선과 마주쳤다. 물자를 나누고 "+fx(`g:${5+R(20)}`)+" (나중엔 다른 플레이어의 배가 될 자리)");
+ else if(r<18+L)say("낯선 상선과 마주쳤다. 물자를 나누고 "+fx(`g:${5+R(20)}`));
  else if(r<28+L){const it=pick(["목재","럼","달걀"]);say("표류물을 건졌다. "+fx(`i:${it}:1`))}
  else if(r<36)say(pick(["멀리서 고래가 숨을 뿜는다.","돌고래 떼가 뱃머리를 따라온다.","갈매기 한 마리가 마스트에 앉았다 간다.","물빛이 갑자기 짙은 청록으로 변한다."]))}
 function tick(dt){S.t+=dt;S.hun=Math.max(0,S.hun-dt/6*(1+M("hun"))*dfx().hun);if(S.auto.on&&S.hun<=S.auto.th)autoLoop();if(S.hun<=0)S.hp-=dt/15;else if(S.hun>40)S.hp=Math.min(hpm(),S.hp+dt/45);efTick(dt);S.ct.gold=Math.max(S.ct.gold||0,S.gold);chkT();chkGoals();
@@ -899,8 +899,10 @@ function renderAll(){if(S.bt&&S.isl===null&&!S.inC)S.view="deck";const c=!!S.inC
  $("tabs").innerHTML=(a?[["deck","갑판"],["kitchen","주방"],["cabin","선장실"],["storage","창고"],["inv","소지품"]]:c?[["city","해저 도시"],["inv","소지품"]]:[["island","섬"],["storage","창고"],["inv","소지품"]]).map(([k,n])=>`<button class="${S.view===k?"on":""}" onclick="go('${k}')">${n}</button>`).join("");
  typeof rTest==="function"&&rTest();rDeck();rBattle();rGoals();rIsl();rCity();rKit();rCab();rSto();rInv();deco();["deck","island","city","kitchen","cabin","storage","inv"].forEach(k=>$("v-"+k).hidden=S.view!==k);live()}
 renderTitle();
-const CHL=[];$("ct").onkeydown=e=>{if(e.key!=="Enter")return;const t=cleanStr($("ct").value,80).trim();if(!t)return;CHL.unshift(`<div>[${esc(C.name)}] ${esc(t)}</div>`);if(!S.chat++)CHL.unshift(`<div>(서버 연결 전이라 지금은 나에게만 보인다)</div>`);CHL.length=Math.min(CHL.length,40);$("chl").innerHTML=CHL.join("");$("ct").value=""};
+if(/[?&]dev(=|&|$)/.test(location.search))$("tstw").hidden=false;   // 개발자 도구는 주소 뒤에 ?dev 를 붙였을 때만 보인다
+const CHL=[];$("ct").onkeydown=e=>{if(e.key!=="Enter")return;const t=cleanStr($("ct").value,80).trim();if(!t)return;CHL.unshift(`<div>[${esc(C.name)}] ${esc(t)}</div>`);if(!S.chat++)CHL.unshift(`<div>(오프라인이라 나에게만 보인다)</div>`);CHL.length=Math.min(CHL.length,40);$("chl").innerHTML=CHL.join("");$("ct").value=""};
 </script>
 <script src="online.js"></script>
+<script src="crew.js"></script>
 </body>
 </html>

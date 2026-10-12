@@ -3,15 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "표류여행 다인 서버 (Cloudflare Workers + D1 / 또는 Node 내장 SQLite)",
-  "engines": {
-    "node": ">=22.13"
-  },
+  "description": "표류여행 다인 서버 (Cloudflare Workers + D1)",
   "scripts": {
-    "start": "node server/server.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --test server/test.mjs"
+    "test": "node --test worker/test.mjs"
   },
   "devDependencies": {
     "wrangler": "^4.149.0"
