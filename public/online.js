@@ -65,22 +65,22 @@ const IDLE_MS=10*60*1000;   // 10분간 입력이 없으면 동기화를 멈춘�
 ["pointerdown","keydown","touchstart"].forEach(ev=>addEventListener(ev,()=>{lastInput=Date.now();if(idle){idle=false;const b=$("olidle");if(b)b.hidden=true;schedule(0)}},{passive:true}));
 function schedule(ms){clearTimeout(timer);if(!O.on)return;
   if(ms!==0&&Date.now()-lastInput>IDLE_MS){idle=true;let b=$("olidle");if(!b){b=document.createElement("div");b.id="olidle";b.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;background:var(--bg);border:1px solid var(--line);padding:6px 14px;font-size:12px";b.textContent="자리 비움 — 화면을 누르면 온라인 연결을 다시 시작합니다.";document.body.appendChild(b)}b.hidden=false;return}
-  timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:(gameOn()||O.crewMode?5000:20000)):ms)}
+  timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:(O.crewMode?(O.hot&&O.hot()?2500:4500):gameOn()?(O.hot&&O.hot()?2500:5000):20000)):ms)}
 O.syncNow=()=>schedule(0);
 function myState(){
   const loc=S.inC?"city":(S.isl!==null||S.dk>=0)?"port":"sea",isl=S.isl!==null?S.isl:S.dk;
   return {name:C.name,ship:SH[S.lv].n,lv:S.lv,x:S.x,y:S.y,hd:S.hd,loc,isl:loc==="port"?isl:-1,
     snap:{h:Math.round(S.hull),hm:hm(),f:Math.round(S.hun),p:Math.round(S.hp),pm:hpm(),d:Math.floor(S.t/1440)+1,sail:!!S.sail,
-      wl:wlabel(),kn:Math.round(kn()*10)/10,in:loc==="port"&&I[isl]?I[isl].n:"",seen:[...S.seen].slice(0,100),logs:S.logs.slice(0,6).map(plain)}}}
+      wl:wlabel(),kn:Math.round(kn()*10)/10,in:loc==="port"&&I[isl]?I[isl].n:"",seen:[...S.seen].slice(0,100),logs:S.logs.slice(0,14).map(plain),...(O.snapExtra?O.snapExtra():{})}}}
 async function sync(){
   if(!O.on||!tok||busy)return;busy=true;let ok=false;
   try{
     const active=gameOn();
-    const r=await api("/sync",{me:active?myState():undefined,since});
+    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined});
     O.data=r;O.off=r.now-Date.now();ok=true;
     for(const ch in r.chat){const a=r.chat[ch];if(a.length)since[ch]=a[a.length-1].id;chatAdd(ch,a)}
-    if(active)await takeDeliveries(r.deliveries);
-    noticeNearby(r);renderDock();renderCrewUI();if(!active&&!O.crewMode&&!$("title").hidden)decorateTitle()
+    if(active)await takeDeliveries(r.deliveries);else if(O.crewMode&&O.crewDeliveries)await O.crewDeliveries(r.deliveries);
+    noticeNearby(r);renderDock();O.renderCrew&&O.renderCrew();if(!active&&!O.crewMode&&!$("title").hidden)decorateTitle()
   }catch(e){}
   busy=false;schedule()}
 
@@ -95,7 +95,6 @@ function take(b){
   return full}
 const avail=k=>Math.max(0,(S.inv[k]||0)-(S.eq&&(S.eq.w===k||S.eq.a===k)?1:0));
 const canPay=b=>S.gold>=(b.gold||0)&&Object.entries(b.items||{}).every(([k,n])=>(S.inv[k]||0)+(S.sto[k]||0)>=n);
-const FXOK=/^[fhsq]:-?\d{1,2}$/;
 async function takeDeliveries(list){
   if(!list||!list.length)return;
   const got=(await api("/claim",{ids:list.map(d=>d.id)})).deliveries;
@@ -113,10 +112,7 @@ function applyOne(d){
   case "bottle_found":{const b=S.out.find(x=>x.srv&&!x.r);if(b)b.r=1;say("🍾 누군가 당신의 병 편지를 주웠다!");break}
   case "bottle_reply":S.mail.unshift({from:cleanStr(p.from,30),text:cleanStr(p.text,80),t:clock(),re:cleanStr(p.re,80)});S.mail.length=Math.min(S.mail.length,40);
     say(`✉ ${esc(p.from)}의 답장: “${esc(p.text)}”`);break;
-  case "crew_work":{let r="";const parts=[];
-    if(p.items)for(const k in p.items){if(knownItem(k)){add(k,Math.min(9,Math.floor(+p.items[k])||0));parts.push(`${esc(k)} ${p.items[k]}`)}}
-    if(p.fx&&FXOK.test(p.fx)){r=fx(p.fx);if(S.hull>hm())S.hull=hm()}
-    say(`⚓ 선원 <b>${esc(p.by)}</b>(${esc(p.duty)}): ${esc(p.text)} ${parts.join(", ")} ${r}`);break}
+  default:O.applyExtra&&O.applyExtra(d)
   }}catch(e){}}
 
 /* ================= 마주침 패널 ================= */
@@ -130,7 +126,7 @@ function dock(){let e=$("olb");if(e)return e;
 O.toggleDock=()=>{dockOpen=!dockOpen;nearSig="";renderDock()};
 function noticeNearby(r){
   if(!gameOn())return;const ids=new Set(r.nearby.map(n=>n.id));
-  for(const n of r.nearby)if(!prevNear.has(n.id))say(`⛵ 다른 배가 가까이 있다: <b>${esc(n.name)}</b>의 ${esc(n.ship)}. (오른쪽 아래 '바다 위의 사람들'에서 인사·거래)`);
+  for(const n of r.nearby)if(!prevNear.has(n.id)){say(`⛵ 다른 배가 가까이 있다: <b>${esc(n.name)}</b>의 ${esc(n.ship)}. (오른쪽 아래 '바다 위의 사람들'에서 인사·거래)`);O.crewLine&&O.crewLine("ship",{n:n})}
   prevNear=ids}
 const dirs=["북","북동","동","남동","남","남서","서","북서"];
 function whereTxt(n){if(n.loc==="port")return "같은 부두";const dx=dl(n.x-S.x,WW),dy=dl(n.y-S.y,WH),a=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;return `${dirs[Math.round(a/45)%8]}쪽 ${n.d}해리`}
@@ -147,7 +143,7 @@ function renderDock(){
   if(inT||r.trades.outgoing.length){h+=`<h2>거래</h2>`;
     h+=r.trades.incoming.map(t=>{const can=canPay(t.want);return `<div class="seat"><b>${esc(t.name)}</b>이(가) 제안한다<div class="sm">받는 것: ${fmtB(t.give)}<br>줄 것: ${fmtB(t.want)}</div><div style="margin-top:6px"><button class="pri" ${can?"":"disabled"} onclick="Online.accept(${t.id})">수락</button><button onclick="Online.decline(${t.id})">거절</button>${can?"":`<span class="sub sm">줄 것이 모자라다</span>`}</div></div>`}).join("");
     h+=r.trades.outgoing.map(t=>`<div class="seat sub">→ <b>${esc(t.name)}</b>에게 제안 중<div class="sm">내놓은 것: ${fmtB(t.give)} / 원하는 것: ${fmtB(t.want)}</div><button onclick="Online.cancelTrade(${t.id})">제안 거두기</button></div>`).join("")}
-  h+=`<h2>내 선원</h2>`+(r.crew.captainOf.length?r.crew.captainOf.map(m=>`<div class="row"><span>${m.online?"● ":"○ "}${esc(m.name)}</span><a onclick="Online.dismiss(${m.id})">내리게 하기</a></div>`).join(""):`<div class="sub sm">선원이 없다. 친구를 초대하면 그 사람이 내 배의 선원으로 낚시·요리·망보기·수리를 거든다.</div>`)
+  h+=`<h2>내 선원</h2>`+(r.crew.captainOf.length?r.crew.captainOf.map(m=>`<div class="row"><span>${m.online?"● ":"○ "}${esc(m.name)} <span class="sub sm">${esc(m.rank||"")}${m.role?" · "+esc(m.role):""}</span></span><a onclick="Online.dismiss(${m.id})">내리게 하기</a></div>`).join(""):`<div class="sub sm">선원이 없다. 친구를 초대하면 직책을 맡아 일하고, 전투와 잠수도 함께한다. 선원의 직책이 맞으면 선택지가 유리해진다.</div>`)
    +r.crew.invitesOut.map(i=>`<div class="row sub sm"><span>초대 중: ${esc(i.memberName)}</span><a onclick="Online.cancelInvite(${i.id})">취소</a></div>`).join("")
    +`<div class="row" style="margin-top:6px"><input id="ci-name" placeholder="초대할 아이디" maxlength="16" style="flex:1;min-width:0" list="ci-dl"><datalist id="ci-dl">${r.roster.map(x=>`<option value="${esc(x.username)}">`).join("")}</datalist><button onclick="Online.invite()">초대</button></div>`;
   if(inv)h+=`<h2>선원 제안</h2>`+r.crew.invitesIn.map(i=>`<div class="seat"><b>${esc(i.captainName)}</b> 선장이 배에 타 달라고 한다.<div style="margin-top:6px"><button class="pri" onclick="Online.respond(${i.id},true)">수락</button><button onclick="Online.respond(${i.id},false)">거절</button></div><div class="sub sm">수락하면 타이틀 화면에서 '선원으로 탑승'할 수 있다.</div></div>`).join("");
@@ -246,60 +242,12 @@ function decorateTitle(){
   const b=$("tbtn");if(!b||!O.on||!O.user)return;let e=$("olt");
   if(!e){e=document.createElement("div");e.id="olt";e.style.cssText="margin-top:18px;border-top:1px solid var(--line);padding-top:12px";b.after(e)}
   const r=O.data,c=r&&r.crew;let h=`<div class="sm"><b>${esc(O.user.username)}</b> 님으로 접속 중 · 저장은 계정에 보관됩니다 <a onclick="Online.logout()">로그아웃</a></div>`;
-  if(c&&c.memberOf)h+=`<div style="margin-top:10px"><button class="pri" onclick="Online.enterCrew()" style="padding:8px 22px">⚓ 선원으로 탑승 — ${esc(c.memberOf.captain)} 선장의 ${esc(c.memberOf.ship?c.memberOf.ship.ship:"배")}</button></div>`;
+  if(c&&c.memberOf)h+=`<div style="margin-top:10px"><button class="pri" onclick="Online.enterCrew()" style="padding:8px 22px">⚓ 선원으로 탑승 — ${esc(c.memberOf.captain)} 선장의 ${esc(c.memberOf.ship?c.memberOf.ship.ship:"배")}</button><div class="sub sm" style="margin-top:4px">직책을 맡아 선장을 돕고, 전투와 잠수도 함께합니다.</div></div>`;
   if(c&&c.invitesIn.length)h+=c.invitesIn.map(i=>`<div class="sm" style="margin-top:8px"><b>${esc(i.captainName)}</b> 선장이 선원으로 초대했습니다. <button class="pri" onclick="Online.respond(${i.id},true)">수락</button><button onclick="Online.respond(${i.id},false)">거절</button></div>`).join("");
   if(c&&c.me&&c.me.purse>0)h+=`<div class="sm sub" style="margin-top:8px">선원 월급 ${c.me.purse}G가 쌓여 있습니다. 내 항해를 시작하면 '바다 위의 사람들'에서 찾을 수 있습니다.</div>`;
   e.innerHTML=h}
 
-/* ================= 선원 시점 ================= */
-const DUTY=[["fish","🎣 낚시","선장의 창고로 생선을 올려 보낸다 (75초)"],["cook","🍲 식사 준비","선장의 허기를 달랜다 (2분)"],["lookout","🔭 망보기","선장의 해도에 새 섬이나 ? 표시가 뜬다 (2분)"],["repair","🔨 선체 수리","배의 선체를 조금 고친다 (2분30초)"]];
-let crewLog=[],crewTick=0,worldDrawn=false;
-function crewBox(){let e=$("crewv");if(e)return e;e=document.createElement("div");e.id="crewv";e.className="scr";e.hidden=true;e.style.maxWidth="900px";document.body.appendChild(e);return e}
-O.enterCrew=()=>{
-  O.crewMode=true;["title","create","game"].forEach(x=>$(x).hidden=true);
-  if(!worldDrawn){try{genWorld();worldDrawn=true}catch(e){}}
-  crewBox().hidden=false;crewLog=[];renderCrewUI();clearInterval(crewTick);crewTick=setInterval(()=>renderCrewTimers(),1000);schedule(0)};
-O.exitCrew=()=>{O.crewMode=false;clearInterval(crewTick);crewBox().hidden=true;worldDrawn=false;show("title");renderTitle()};
-O.leaveShip=()=>{if(confirm("이 배에서 내릴까요? 쌓인 월급은 그대로 남습니다."))api("/crew/leave",{}).then(()=>{O.exitCrew();schedule(0)}).catch(e=>toast(e.message))};
-O.duty=async k=>{try{const r=await api("/crew/duty",{duty:k});crewLog.unshift(`${new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})} ${r.msg}${r.wage?` (월급 +${r.wage}G)`:""}`);crewLog.length=Math.min(8,crewLog.length)}catch(e){crewLog.unshift("⚠ "+e.message)}schedule(0);renderCrewUI()};
-const pct=(v,m)=>Math.max(0,Math.min(100,Math.round(100*v/Math.max(1,m))));
-const bar=(v,m,col)=>`<div class="bar" style="background:var(--hi);margin:2px 0 8px"><i style="display:block;height:100%;width:${pct(v,m)}%;background:${col||"var(--acc)"}"></i></div>`;
-function crewMap(sh){
-  if(typeof I==="undefined"||!I.length)return "";const seen=new Set((sh.snap&&sh.snap.seen)||[]);
-  let s=`<svg viewBox="0 0 ${WW*K} ${WH*K}" style="cursor:default"><rect width="${WW*K}" height="${WH*K}" fill="var(--sh)" stroke="none"/>`;
-  I.forEach((w,i)=>{if(seen.has(i)||i===0)s+=`<path d="${w.p}" fill="var(--land)" stroke="var(--sub)" stroke-width="1.5"/>`});
-  s+=`<g transform="translate(${sh.x*K} ${sh.y*K}) rotate(${sh.hd})"><path d="M0,-30 L18,22 L0,13 L-18,22Z" fill="var(--warn)" stroke="var(--bg)" stroke-width="3"/></g></svg>`;return s}
-function renderCrewUI(){
-  if(!O.crewMode||!O.data)return;const c=O.data.crew,m=c.memberOf,e=crewBox();
-  if(!m){e.innerHTML=`<h1 style="font-size:20px">선원 시점</h1><p class="sub">이제 어느 배에도 타고 있지 않습니다.</p><button onclick="Online.exitCrew()">타이틀로</button>`;return}
-  const sh=m.ship,sn=(sh&&sh.snap)||{},me=c.me||{purse:0,xp:0,tasks:0,rank:"견습 선원",cd:{},dayLeft:0};
-  const ago=sh?Math.max(0,Math.round((srvNow()-sh.at)/60000)):0;
-  const state=!sh?"아직 항해 기록이 없다":sh.online?(sh.loc==="port"?`${esc(sn.in||"어느 부두")}에 정박 중`:sn.sail?`항해 중 · ${sn.kn||0}노트 · ${esc(sn.wl||"")}`:"바다에 닻을 내리고 있다"):`선장이 자리를 비웠다 (${ago}분 전 마지막 신호) — 일은 쌓아 두면 돌아와서 받는다`;
-  const old=$("cr-in"),keep=old?old.value:"";
-  e.innerHTML=`<div class="vh"><svg viewBox="0 0 48 48"><path d="M24 6v28M14 14h20M10 34c0 6 6 8 14 8s14-2 14-8M10 34l6-4M38 34l-6-4"/></svg><div><div class="vt">${esc(sh?sh.ship:"배")} — ${esc(m.captain)} 선장</div><div class="sub sm">나는 <b>${esc(me.rank)}</b> · 일한 횟수 ${me.tasks} · 동료 ${m.shipmates.filter(x=>x!==O.user.username).map(esc).join(", ")||"없음"}</div></div></div>
-  <div class="two"><div class="col">
-   <div class="card"><h2 style="margin-top:0">배 상태 ${sh&&sh.online?"<span class='sm' style='color:var(--acc)'>● 선장 접속 중</span>":""}</h2><div class="sm sub" style="margin-bottom:8px">${state}</div>
-    ${sn.h!=null?`<div class="row"><span>선체</span><span class="sm">${sn.h}/${sn.hm}</span></div>${bar(sn.h,sn.hm)}<div class="row"><span>허기 (선장)</span><span class="sm">${sn.f}/100</span></div>${bar(sn.f,100)}<div class="row"><span>체력 (선장)</span><span class="sm">${sn.p}/${sn.pm}</span></div>${bar(sn.p,sn.pm)}<div class="sub sm">항해 ${sn.d}일째</div>`:`<div class="sub sm">선장이 아직 출항하지 않았다.</div>`}
-   </div>
-   ${sh?`<div class="card"><h2 style="margin-top:0">해도 <span class="sub sm" style="font-weight:400">(선장이 본 바다만 보인다)</span></h2>${crewMap(sh)}</div>`:""}
-  </div><div class="col">
-   <div class="card"><h2 style="margin-top:0">갑판 일</h2><div class="sub sm" style="margin-bottom:6px">일을 하면 결과가 선장에게 전해지고, 나는 월급이 쌓입니다. (오늘 더 받을 수 있는 월급 ${me.dayLeft}G)</div>
-    ${DUTY.map(([k,t,d])=>`<div class="row"><span>${t}<br><span class="sub sm">${d}</span></span><button id="du-${k}" data-k="${k}" onclick="Online.duty('${k}')">하기</button></div>`).join("")}
-    <div class="lg sm sub" style="margin-top:8px;max-height:130px">${crewLog.map(x=>`<div>${esc(x)}</div>`).join("")||"<div>아직 한 일이 없다.</div>"}</div>
-    <div class="row" style="margin-top:6px"><span>쌓인 월급 <b>${me.purse}G</b></span><span class="sub sm">내 항해에서 찾는다</span></div></div>
-   <div class="card"><h2 style="margin-top:0">선장의 항해일지</h2><div class="lg sm">${(sn.logs||[]).map(x=>`<div>${esc(x)}</div>`).join("")||"<div>(기록 없음)</div>"}</div></div>
-   <div class="card"><h2 style="margin-top:0">선원 채팅</h2><div id="cr-chl" class="sub sm lg" style="max-height:140px"></div><input id="cr-in" maxlength="80" placeholder="말을 입력하고 Enter" style="width:100%;margin-top:6px"></div>
-  </div></div>
-  <div style="margin-top:16px"><button onclick="Online.exitCrew()">타이틀로 (배는 그대로 탑승 중)</button><button onclick="Online.leaveShip()">배에서 내리기</button></div>`;
-  const inp=$("cr-in");inp.value=keep;inp.onkeydown=ev=>{if(ev.key!=="Enter")return;const t=cleanStr(inp.value,80).trim();if(!t)return;inp.value="";const ch="crew:"+m.captainId;
-    api("/chat",{channel:ch,text:t}).then(()=>schedule(0)).catch(er=>{crewLog.unshift("⚠ "+er.message);renderCrewUI()})};
-  const cl=$("cr-chl");cl.innerHTML=((CH["crew:"+m.captainId]||[]).slice().reverse().map(x=>`<div>[${esc(x.name)}] ${esc(x.text)}</div>`).join(""))||"<div>(아직 아무도 말하지 않았다)</div>";
-  if(keep)inp.focus();renderCrewTimers()}
-function renderCrewTimers(){
-  if(!O.crewMode||!O.data||!O.data.crew.me)return;const cd=O.data.crew.me.cd||{};
-  for(const [k] of DUTY){const b=$("du-"+k);if(!b)continue;const left=Math.ceil(((cd[k]||0)-srvNow())/1000);b.disabled=left>0;b.textContent=left>0?`${left}초`:"하기"}}
-function renderCrewUIKeep(){renderCrewUI()}
-
+O.gameOn=gameOn;O.srvNow=srvNow;O.plain=plain;O.renderChat=()=>renderChat();
 /* ================= 시작 ================= */
 async function boot(){
   hookGame();hookChat();

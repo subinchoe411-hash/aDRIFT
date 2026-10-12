@@ -1,4 +1,4 @@
-import { SCHEMA } from "./schema.js";
+import { SCHEMA, SCHEMA_VERSION, MIGRATIONS } from "./schema.js";
 import {
   HttpError, bad, now, sha256, newToken, hashPassword, checkPassword, safeEq, newInviteCode,
   normCode, cleanStr, cleanName, validUser, num, dist, randHex,
@@ -22,8 +22,17 @@ const dlv = (env, uid, kind, payload) => P(env, "INSERT INTO deliveries(user_id,
 let ready = null;
 async function ensureSchema(env) {
   if (!ready) ready = (async () => {
-    try { await env.DB.prepare("SELECT 1 FROM rl LIMIT 1").first(); return; } catch { /* 처음이면 테이블이 없다 */ }
+    // 이미 최신이면 질의 한 번으로 끝난다
+    try {
+      const v = await env.DB.prepare("SELECT v FROM meta WHERE k='ver'").first();
+      if (v && Number(v.v) >= SCHEMA_VERSION) return;
+    } catch { /* 처음이거나 옛 버전이면 아래에서 만든다 */ }
     await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
+    for (const m of MIGRATIONS) {
+      try { await env.DB.prepare(m).run(); }
+      catch (e) { if (!/duplicate column|already exists/i.test(String(e && e.message))) throw e; }
+    }
+    await env.DB.prepare("INSERT INTO meta(k,v) VALUES('ver',?) ON CONFLICT(k) DO UPDATE SET v=excluded.v").bind(String(SCHEMA_VERSION)).run();
   })().catch((e) => { ready = null; throw e; });
   return ready;
 }
@@ -85,60 +94,173 @@ function cleanBundle(b, label) {
 }
 const isEmpty = (b) => !b.gold && !Object.keys(b.items).length;
 
-/* ---------- 선원 일 ---------- */
+/* ---------- 선원 ---------- */
+// 직책 7종은 게임 장면 선택지의 "필요 직책"(정비공·잠수부·망꾼·항해사·낚시꾼·상인·요리사)과 같다.
+// 해당 직책의 선원이 배에 있으면 선장은 그 선택지에서 유리해진다.
+const ROLES = ["낚시꾼", "요리사", "망꾼", "정비공", "항해사", "상인", "잠수부"];
 const OPEN = ["멸치", "고등어", "오징어", "참치", "가다랑어", "연어", "갈치"];
 const COAST = ["조개", "새우", "게", "도미", "광어", "전복", "문어"];
 const rpick = (a) => a[Math.floor(Math.random() * a.length)];
+const rint = (lo, hi) => lo + Math.floor(Math.random() * (hi - lo + 1));
 const DUTIES = {
-  fish:    { name: "낚시",     cd: 75_000,  wage: 6 },
-  cook:    { name: "식사 준비", cd: 120_000, wage: 5 },
-  lookout: { name: "망보기",   cd: 120_000, wage: 6 },
-  repair:  { name: "선체 수리", cd: 150_000, wage: 5 },
+  fish:     { name: "낚시",     role: "낚시꾼", cd: 75_000,  wage: 6 },
+  cook:     { name: "식사 준비", role: "요리사", cd: 120_000, wage: 5 },
+  lookout:  { name: "망보기",   role: "망꾼",   cd: 120_000, wage: 6 },
+  repair:   { name: "선체 수리", role: "정비공", cd: 150_000, wage: 5 },
+  navigate: { name: "항로 점검", role: "항해사", cd: 150_000, wage: 6 },
+  haggle:   { name: "물물교환", role: "상인",   cd: 150_000, wage: 6 },
+  dive:     { name: "잠수 수색", role: "잠수부", cd: 120_000, wage: 6 },
 };
 const RANKS = [[0, "견습 선원"], [20, "갑판원"], [60, "숙련 선원"], [150, "갑판장"]];
-const rankOf = (xp) => RANKS.filter(([m]) => xp >= m).pop()[1];
+const rankIdx = (xp) => RANKS.reduce((n, [m], i) => (xp >= m ? i : n), 0);
+const rankOf = (xp) => RANKS[rankIdx(xp)][1];
 const DAILY_CAP = 200;
+const COND_COST = 12, COND_REGEN = 30_000;       // 컨디션 100 만점, 30초에 1 회복
 const dayKey = () => new Date().toISOString().slice(0, 10);
+const condNow = (p, t) => Math.min(100, (p.cond == null ? 100 : p.cond) + Math.floor((t - (p.cond_at || 0)) / COND_REGEN));
+const fill = (tpl, v) => tpl.replace(/\{(\w+)\}/g, (_, k) => (v[k] == null ? "" : v[k]));
+const listItems = (items) => Object.entries(items).map(([k, v]) => `${k} ${v}`).join(", ");
+
+// 같은 일도 매번 다른 문장으로: M = 선원 본인에게 보이는 말, C = 선장 항해일지에 남는 말
+const LINES = {
+  fish: {
+    M: ["뱃전에 기대 낚싯줄을 드리웠다. 한참 뒤 손끝이 묵직해지더니 {items}이(가) 올라왔다.", "물결을 읽어 미끼를 던졌다. 줄이 팽팽해지는 순간 힘껏 당겨 {items}을(를) 건졌다.", "고물에 앉아 콧노래를 부르며 낚시를 했다. 바다는 {items}(으)로 답해 주었다."],
+    C: ["선원 {by}이(가) 뱃전에서 낚싯줄을 드리웠다가 {items}을(를) 끌어 올렸다.", "고물 쪽에서 {by}의 환호가 들렸다. 갑판 위에서 {items}이(가) 파닥인다.", "{by}이(가) 낚싯대를 힘껏 당기자 {items}이(가) 물보라와 함께 갑판으로 튀어 올랐다."],
+  },
+  cook: {
+    M: ["남은 재료를 모아 뜨끈한 한 그릇을 끓였다. 김이 오르는 냄비를 선장 앞에 놓았다. (허기 +{n})", "화덕 앞에서 소매를 걷고 국자를 휘저었다. 냄새만으로도 입에 침이 고였다. (허기 +{n})", "간을 보고 소금을 한 꼬집 더했다. 선장이 한 숟갈 뜨고 고개를 끄덕였다. (허기 +{n})"],
+    C: ["{by}이(가) 차린 따뜻한 식사가 올라왔다. 한 숟갈 뜨자 속이 풀린다. (허기 +{n})", "선실에서 구수한 냄새가 퍼진다. {by}이(가) 끓인 국이다. (허기 +{n})", "{by}이(가) 말없이 그릇을 내민다. 뜨끈한 국물이 몸을 데운다. (허기 +{n})"],
+  },
+  lookout: {
+    M: ["돛대 위로 올라가 손차양을 하고 수평선을 샅샅이 훑었다.", "높은 곳에서 바람을 맞으며 바다의 빛깔 변화를 살폈다.", "망원경을 눈에 대고 한 바퀴 천천히 돌았다. 놓친 게 없는지 두 번 확인했다."],
+    C: ["돛대 위에서 {by}의 목소리가 내려온다. \"선장님, 저쪽을 보십시오!\"", "{by}이(가) 돛대에 올라 한참 수평선을 살피더니 손짓으로 방향을 알려 왔다.", "높은 곳에서 {by}이(가) 외친다. \"뭔가 보입니다!\""],
+  },
+  repair: {
+    M: ["망치와 못을 들고 선체를 돌며 틈새를 메웠다. (선체 +{n})", "삐걱이는 판자를 하나씩 눌러 보며 헐거운 곳을 단단히 조였다. (선체 +{n})", "새는 곳에 기름 먹인 천을 덧대고 망치로 두드렸다. (선체 +{n})"],
+    C: ["갑판 아래에서 망치 소리가 울린다. {by}이(가) 선체를 손보고 있다. (선체 +{n})", "{by}이(가) 땀을 닦으며 올라왔다. \"당분간은 버틸 겁니다.\" (선체 +{n})", "{by}의 손을 거친 판자가 한결 단단해졌다. (선체 +{n})"],
+  },
+  navigate: {
+    M: ["해도와 별자리를 맞춰 보고 키를 반 뼘 틀었다. 돛이 바람을 제대로 받는다.", "바람의 결을 읽어 돛 각도를 고쳤다. 배가 한결 가볍게 미끄러진다.", "나침반과 물빛을 번갈아 보며 더 빠른 물길을 골라 주었다."],
+    C: ["{by}이(가) 해도를 펴 놓고 항로를 다듬었다. 배가 눈에 띄게 빨라진다.", "{by}이(가) 키를 살짝 틀자 돛이 바람을 가득 받았다.", "\"이쪽 물길이 더 순합니다.\" {by}의 말대로 배가 미끄러지듯 나아간다."],
+  },
+  haggle: {
+    M: ["지나가던 상인선과 한참 흥정을 벌였다. 남는 것이 있었다. (골드 +{n})", "묵혀 둔 잡동사니를 그럴듯하게 포장해 팔아 넘겼다. (골드 +{n})", "미소를 지으며 값을 깎고 또 깎아 한 푼을 더 남겼다. (골드 +{n})"],
+    C: ["{by}이(가) 능청스럽게 거래를 성사시키고 돌아왔다. 주머니가 두둑해졌다. (골드 +{n})", "\"싸게 샀습니다, 선장님.\" {by}이(가) 웃으며 몫을 내민다. (골드 +{n})", "{by}의 입담에 상인이 두 손을 들었다. (골드 +{n})"],
+  },
+  dive: {
+    M: ["숨을 크게 들이쉬고 뱃전에서 뛰어들었다. 바닥을 훑어 {items}을(를) 건져 올렸다.", "차가운 물속으로 깊이 내려가 바위틈을 뒤졌다. 손에 잡힌 {items}을(를) 들고 떠올랐다.", "물살을 가르며 잠수했다. 숨이 차오를 즈음 {items}을(를) 쥐고 수면으로 솟았다."],
+    C: ["{by}이(가) 물보라를 일으키며 뛰어들었다가 {items}을(를) 들고 올라왔다.", "\"푸하!\" 수면 위로 솟은 {by}의 손에 {items}이(가) 들려 있다.", "한참을 잠잠하던 물 위로 {by}이(가) 불쑥 떠올랐다. 품에 {items}이(가) 가득하다."],
+  },
+};
+const REST_LINES = ["해먹에 몸을 눕히자 배의 흔들림이 요람처럼 느껴졌다. 어느새 선잠이 들었다.", "선원실 구석에서 담요를 덮고 눈을 붙였다. 파도 소리가 자장가가 되어 주었다.", "따뜻한 차 한 잔을 마시고 해먹에 기댔다. 뭉친 어깨가 서서히 풀린다."];
+const SUP = {
+  fire:     { need: "bt", cd: 20_000, cost: 8,  name: "포격 지원" },
+  mend:     { need: "bt", cd: 25_000, cost: 8,  name: "응급처치" },
+  guard:    { need: "bt", cd: 30_000, cost: 8,  name: "방패 태세" },
+  distract: { need: "bt", cd: 35_000, cost: 10, name: "교란" },
+  air:      { need: "dv", cd: 40_000, cost: 8,  name: "공기 보급" },
+  rescue:   { need: "dv", cd: 60_000, cost: 10, name: "구조 줄" },
+};
+const SUP_ROLE = { fire: "낚시꾼", mend: "요리사", guard: "정비공", distract: "망꾼", air: "잠수부", rescue: "잠수부" };
+
+async function profile(env, uid) {
+  await run(env, "INSERT OR IGNORE INTO crew_profile(user_id) VALUES(?)", uid);
+  return first(env, "SELECT * FROM crew_profile WHERE user_id=?", uid);
+}
+const crewRowOf = (env, uid) => first(env, "SELECT * FROM crew WHERE member_id=?", uid);
+// 쿨다운 확인과 갱신을 한 문장으로 (동시에 두 번 눌러도 한 번만 통과)
+async function takeCooldown(env, uid, key, ms, t) {
+  const r = await run(env,
+    `INSERT INTO crew_cd(member_id,duty,ready) VALUES(?1,?2,?3) ON CONFLICT(member_id,duty) DO UPDATE SET ready=excluded.ready WHERE crew_cd.ready<=?4`,
+    uid, key, t + ms, t);
+  return changes(r) === 1;
+}
+// 컨디션을 쓰고 월급·경험을 올린다 (한 문장)
+async function needCond(env, uid, p, t, cost) {
+  const cur = condNow(p, t);
+  if (cur < cost) throw bad(`지쳐서 손이 말을 듣지 않습니다. (컨디션 ${cur}) 선원실 해먹에서 쉬세요.`);
+  return cur - cost;
+}
 
 async function doDuty(env, u, duty) {
   const d = DUTIES[duty];
   if (!d) throw bad("알 수 없는 일입니다.");
-  const c = await first(env, "SELECT * FROM crew WHERE member_id=?", u.id);
+  const c = await crewRowOf(env, u.id);
   if (!c) throw bad("탑승한 배가 없습니다.");
   const t = now();
   const pend = await first(env, "SELECT COUNT(*) n FROM deliveries WHERE user_id=? AND claimed IS NULL AND kind='crew_work'", c.captain_id);
   if (pend.n >= 15) throw bad("선장이 한동안 자리를 비워 일이 쌓여 있습니다. 조금 쉬세요.");
-  // 쿨다운 확인과 갱신을 한 문장으로 (동시에 두 번 눌러도 한 번만 통과)
-  const cdr = await run(env,
-    `INSERT INTO crew_cd(member_id,duty,ready) VALUES(?1,?2,?3) ON CONFLICT(member_id,duty) DO UPDATE SET ready=excluded.ready WHERE crew_cd.ready<=?4`,
-    u.id, duty, t + d.cd, t);
-  if (changes(cdr) !== 1) throw bad("아직 손이 비지 않았습니다.");
+  const p = await profile(env, u.id), ri = rankIdx(p.xp);
+  const left = await needCond(env, u.id, p, t, COND_COST);
+  if (!(await takeCooldown(env, u.id, duty, Math.round(d.cd * (1 - 0.05 * ri)), t))) throw bad("아직 손이 비지 않았습니다.");
   const cap = await first(env, "SELECT loc FROM presence WHERE user_id=?", c.captain_id);
   const coast = cap && cap.loc === "port";
-  let work, msg;
+  const bonus = p.role === d.role, mult = bonus ? 1.5 : 1;
+  const work = { by: u.username, duty: d.name, role: bonus ? d.role : "" };
+  let mine = null, vars = { by: u.username }, items = null;
   if (duty === "fish") {
-    const n = 1 + Math.floor(Math.random() * 3), items = {};
+    const n = rint(1, 3) + (bonus && Math.random() < 0.4 ? 1 : 0);
+    items = {};
     for (let i = 0; i < n; i++) { const k = rpick(coast ? COAST : OPEN); items[k] = (items[k] || 0) + 1; }
-    work = { items }; msg = Object.entries(items).map(([k, v]) => k + " " + v).join(", ") + "을(를) 낚아 올렸다.";
+    if (n >= 2) {   // 한 마리는 선원 몫 (선원 주방 재료가 된다)
+      const k = Object.keys(items)[0];
+      mine = { [k]: 1 }; items[k]--; if (!items[k]) delete items[k];
+    }
+    work.items = items; vars.items = listItems(items) || "빈 낚싯줄";
   } else if (duty === "cook") {
-    const f = 8 + Math.floor(Math.random() * 8);
-    work = { fx: "f:" + f }; msg = "따뜻한 한 끼를 차려 선장의 허기를 달랬다. (허기 +" + f + ")";
+    const f = Math.round(rint(8, 15) * mult); work.fx = "f:" + f; vars.n = f;
   } else if (duty === "lookout") {
-    work = { fx: Math.random() < 0.6 ? "s:1" : "q:1" }; msg = "돛대 위에서 수평선을 샅샅이 살폈다.";
-  } else {
-    const h = 3 + Math.floor(Math.random() * 4);
-    work = { fx: "h:-" + h }; msg = "갑판의 구멍을 메우고 선체를 손봤다. (선체 +" + h + ")";
+    work.fx = Math.random() < 0.6 ? "s:1" : "q:1";
+    if (bonus) work.fx = "s:1;q:1";
+  } else if (duty === "repair") {
+    const h = Math.round(rint(3, 6) * mult); work.fx = "h:-" + h; vars.n = h;
+  } else if (duty === "navigate") {
+    work.fx = bonus ? "b:1" : "b:.6";
+  } else if (duty === "haggle") {
+    const g = Math.round(rint(12, 24) * mult); work.fx = "g:" + g; vars.n = g;
+  } else if (duty === "dive") {
+    const n = rint(1, 2) + (bonus ? 1 : 0);
+    items = {};
+    for (let i = 0; i < n; i++) { const k = rpick(["조개", "조개", "해초", "전복"]); items[k] = (items[k] || 0) + 1; }
+    work.items = items; vars.items = listItems(items);
+    if (Math.random() < 0.1) work.fx = "g:" + rint(25, 45);
   }
-  await run(env, "INSERT OR IGNORE INTO crew_profile(user_id) VALUES(?)", u.id);
-  const p = await first(env, "SELECT * FROM crew_profile WHERE user_id=?", u.id);
+  const L = LINES[duty];
+  const msg = fill(rpick(L.M), vars) + (bonus ? ` (${d.role}의 솜씨!)` : "");
+  work.text = fill(rpick(L.C), vars) + (bonus ? ` — ${d.role}의 솜씨다.` : "");
   const day = dayKey(), dayEarn = p.day === day ? p.day_earn : 0;
-  const wage = Math.max(0, Math.min(d.wage, DAILY_CAP - dayEarn));
-  work.by = u.username; work.duty = d.name; work.text = msg;
+  const wage = Math.max(0, Math.min(d.wage + (bonus ? 2 : 0) + ri, DAILY_CAP - dayEarn));
   await env.DB.batch([
-    P(env, "UPDATE crew_profile SET purse=purse+?, xp=xp+1, tasks=tasks+1, day=?, day_earn=? WHERE user_id=?", wage, day, dayEarn + wage, u.id),
+    P(env, "UPDATE crew_profile SET purse=purse+?, xp=xp+1, tasks=tasks+1, day=?, day_earn=?, cond=?, cond_at=? WHERE user_id=?", wage, day, dayEarn + wage, left, t, u.id),
     dlv(env, c.captain_id, "crew_work", work),
   ]);
-  return { msg, wage, ready: t + d.cd };
+  return { msg, wage, ready: t + Math.round(d.cd * (1 - 0.05 * ri)), cond: left, mine, bonus };
+}
+
+// 전투·잠수 중인 선장을 돕는다. 선장이 지금 정말 그 상황인지는 선장이 올린 최근 상태(snap)로 확인한다.
+async function doSupport(env, u, kind) {
+  const sp = SUP[kind];
+  if (!sp) throw bad("알 수 없는 지원입니다.");
+  const c = await crewRowOf(env, u.id);
+  if (!c) throw bad("탑승한 배가 없습니다.");
+  const t = now();
+  const cap = await first(env, "SELECT snap,updated FROM presence WHERE user_id=?", c.captain_id);
+  const snap = cap ? json(cap.snap) : {};
+  if (!cap || t - cap.updated > 45_000 || !snap[sp.need]) throw bad(sp.need === "bt" ? "지금은 싸우고 있지 않습니다." : "지금은 잠수 중이 아닙니다.");
+  const p = await profile(env, u.id), ri = rankIdx(p.xp);
+  const left = await needCond(env, u.id, p, t, sp.cost);
+  if (!(await takeCooldown(env, u.id, "sup:" + kind, sp.cd, t))) throw bad("아직 준비 중입니다.");
+  const bonus = p.role === SUP_ROLE[kind];
+  const power = kind === "fire" ? 10 + ri * 3 + (bonus ? 5 : 0)
+    : kind === "mend" ? 14 + ri * 3 + (bonus ? 6 : 0)
+    : kind === "air" ? 4 + (ri >= 2 ? 1 : 0) + (bonus ? 2 : 0)
+    : kind === "rescue" ? 15 + ri * 2 + (bonus ? 6 : 0)
+    : (bonus ? 2 : 1);     // guard / distract: 지속 턴 수
+  await env.DB.batch([
+    P(env, "UPDATE crew_profile SET xp=xp+1, tasks=tasks+1, cond=?, cond_at=? WHERE user_id=?", left, t, u.id),
+    dlv(env, c.captain_id, "crew_support", { kind, power, by: u.username, role: p.role || "", bonus }),
+  ]);
+  return { ok: true, cond: left, power, bonus, ready: t + sp.cd };
 }
 
 /* ---------- 라우터 ---------- */
@@ -203,13 +325,15 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   if (m && typeof m === "object") {
     const loc = ["sea", "port", "city"].includes(m.loc) ? m.loc : "sea";
     let snap = "{}";
-    if (m.snap && typeof m.snap === "object") { snap = JSON.stringify(m.snap); if (snap.length > 2500) snap = "{}"; }
+    if (m.snap && typeof m.snap === "object") { snap = JSON.stringify(m.snap); if (snap.length > 4500) snap = "{}"; }
     stm.push(P(env, `INSERT INTO presence(user_id,name,ship,lv,x,y,hd,loc,isl,snap,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?)
       ON CONFLICT(user_id) DO UPDATE SET name=excluded.name,ship=excluded.ship,lv=excluded.lv,x=excluded.x,y=excluded.y,
       hd=excluded.hd,loc=excluded.loc,isl=excluded.isl,snap=excluded.snap,updated=excluded.updated`,
       user.id, cleanName(m.name), cleanStr(m.ship, 16) || "조각배", Math.floor(num(m.lv, 0, 3)),
       num(m.x, 0, 60), num(m.y, 0, 42), num(m.hd, 0, 360), loc, Math.floor(num(m.isl, -1, 200, -1)), snap, t));
   }
+  // 선원 화면에 접속 중이라는 신호: 배 위치 대신 "지금 배에 타고 있다"만 알린다
+  if (body.crew === true) stm.push(P(env, "UPDATE crew_profile SET seen=? WHERE user_id=?", t, user.id));
   const o = stm.length;
   stm.push(
     P(env, "SELECT * FROM presence WHERE user_id=?", user.id),
@@ -219,7 +343,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT id,kind,payload,created FROM deliveries WHERE user_id=? AND claimed IS NULL ORDER BY id LIMIT 40", user.id),
     P(env, "SELECT t.*,u.username fromName FROM trades t JOIN users u ON u.id=t.from_id WHERE t.to_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
     P(env, "SELECT t.*,u.username toName FROM trades t JOIN users u ON u.id=t.to_id WHERE t.from_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
-    P(env, "SELECT c.member_id id,u.username,p.updated seen FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN presence p ON p.user_id=c.member_id WHERE c.captain_id=?", user.id),
+    P(env, "SELECT c.member_id id,u.username,cp.seen,cp.role,cp.xp FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", user.id),
     P(env, "SELECT i.id,i.captain_id,u.username captainName,i.created FROM crew_invites i JOIN users u ON u.id=i.captain_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
@@ -249,27 +373,27 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   if (crewRow) stm2.push(
     P(env, "SELECT username FROM users WHERE id=?", crewRow.captain_id),
     P(env, "SELECT * FROM presence WHERE user_id=?", crewRow.captain_id),
-    P(env, "SELECT u.username FROM crew c JOIN users u ON u.id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
+    P(env, "SELECT u.username,cp.role FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
     P(env, "SELECT duty,ready FROM crew_cd WHERE member_id=?", user.id));
   const r2 = (await env.DB.batch(stm2)).map((x) => x.results || []);
   const chat = {};
   chans.forEach((ch, i) => { chat[ch] = r2[i]; });
 
   const crew = { captainOf: [], memberOf: null, invitesIn: invInR, invitesOut: invOutR, me: null };
-  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.username, online: !!(r.seen && t - r.seen < FRESH * 2) }));
+  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0 }));
   let cd = {};
   if (crewRow) {
     const k = chans.length, cp = r2[k + 1][0];
     cd = Object.fromEntries(r2[k + 3].map((r) => [r.duty, r.ready]));
     crew.memberOf = {
       captainId: crewRow.captain_id, captain: r2[k][0] && r2[k][0].username,
-      shipmates: r2[k + 2].map((r) => r.username),
+      shipmates: r2[k + 2].map((r) => ({ name: r.username, role: r.role || "" })),
       ship: cp ? { name: cp.name, ship: cp.ship, lv: cp.lv, x: cp.x, y: cp.y, hd: cp.hd, loc: cp.loc, isl: cp.isl, online: t - cp.updated < FRESH * 2, snap: json(cp.snap), at: cp.updated } : null,
     };
   }
   if (p || crewRow) {
-    const pp = p || { purse: 0, xp: 0, tasks: 0, day: "", day_earn: 0 };
-    crew.me = { purse: pp.purse, xp: pp.xp, tasks: pp.tasks, rank: rankOf(pp.xp), cd, dayLeft: DAILY_CAP - (pp.day === dayKey() ? pp.day_earn : 0) };
+    const pp = p || { purse: 0, xp: 0, tasks: 0, day: "", day_earn: 0, role: "", cond: 100, cond_at: 0 };
+    crew.me = { purse: pp.purse, xp: pp.xp, tasks: pp.tasks, rank: rankOf(pp.xp), role: pp.role || "", cond: condNow(pp, t), cd, dayLeft: DAILY_CAP - (pp.day === dayKey() ? pp.day_earn : 0) };
   }
 
   return {
@@ -457,6 +581,95 @@ route("POST", "/api/crew/duty", async ({ env, user, body }) => {
   await limit(env, "duty:" + user.id, 30, 60_000);
   return doDuty(env, user, String(body.duty || ""));
 });
+route("POST", "/api/crew/support", async ({ env, user, body }) => {
+  await limit(env, "sup:" + user.id, 40, 60_000);
+  return doSupport(env, user, String(body.kind || ""));
+});
+route("POST", "/api/crew/role", async ({ env, user, body }) => {
+  const role = String(body.role || "");
+  if (!ROLES.includes(role)) throw bad("알 수 없는 직책입니다.");
+  const p = await profile(env, user.id);
+  if (p.role === role) return { ok: true, role };
+  const free = await takeCooldown(env, user.id, "role", 300_000, now());   // 처음 고를 땐 제한 없이, 그 뒤 5분 동안 바꾸기 잠김
+  if (p.role && !free) throw bad("직책은 5분에 한 번만 바꿀 수 있습니다.");
+  await run(env, "UPDATE crew_profile SET role=? WHERE user_id=?", role, user.id);
+  return { ok: true, role };
+});
+route("POST", "/api/crew/rest", async ({ env, user }) => {
+  const t = now(), p = await profile(env, user.id), cur = condNow(p, t);
+  if (cur >= 95) throw bad("아직 기운이 넘칩니다. 좀 더 일하고 쉬세요.");
+  if (!(await takeCooldown(env, user.id, "rest", 180_000, t))) throw bad("방금 쉬었습니다. 잠시 후에 다시 쉴 수 있어요.");
+  const cond = Math.min(100, cur + 30);
+  await run(env, "UPDATE crew_profile SET cond=?, cond_at=? WHERE user_id=?", cond, t, user.id);
+  return { ok: true, cond, msg: rpick(REST_LINES) };
+});
+// 선장이 올린 장면(sc)에서 이 선택지를 권한다. 선장 화면에 ★ 로 표시된다.
+route("POST", "/api/crew/advise", async ({ env, user, body }) => {
+  await limit(env, "adv:" + user.id, 12, 60_000);
+  const c = await crewRowOf(env, user.id);
+  if (!c) throw bad("탑승한 배가 없습니다.");
+  const opt = Math.floor(num(body.opt, 0, 9, -1));
+  const cap = await first(env, "SELECT snap,updated FROM presence WHERE user_id=?", c.captain_id);
+  const snap = cap ? json(cap.snap) : {};
+  if (!cap || now() - cap.updated > 45_000 || !snap.sc || !Array.isArray(snap.sc.o) || opt < 0 || opt >= snap.sc.o.length) throw bad("그 장면은 이미 지나갔습니다.");
+  const p = await profile(env, user.id);
+  await dlv(env, c.captain_id, "crew_advice", { opt, by: user.username, role: p.role || "" }).run();
+  return { ok: true };
+});
+// 선장이 "함께한 보람"을 선원에게 나눈다. 이 선장의 선원에게만, 분당 한 번까지.
+route("POST", "/api/crew/coop", async ({ env, user, body }) => {
+  const kind = String(body.kind || "");
+  const R = { battle: { wage: 15, xp: 3, txt: "선장과 함께 싸워 이겼다" }, dive: { wage: 20, xp: 3, txt: "선장과 함께 해저 구역을 돌파했다" } }[kind];
+  if (!R) throw bad("알 수 없는 종류입니다.");
+  await limit(env, "coop:" + user.id, 1, 60_000);
+  const ids = (Array.isArray(body.ids) ? body.ids : []).filter(Number.isInteger).slice(0, 4);
+  const day = dayKey(), out = [];
+  for (const id of ids) {
+    const c = await crewRowOf(env, id);
+    if (!c || c.captain_id !== user.id) continue;
+    const p = await profile(env, id), earn = p.day === day ? p.day_earn : 0, wage = Math.max(0, Math.min(R.wage, DAILY_CAP - earn));
+    await env.DB.batch([
+      P(env, "UPDATE crew_profile SET purse=purse+?, xp=xp+?, day=?, day_earn=? WHERE user_id=?", wage, R.xp, day, earn + wage, id),
+      dlv(env, id, "coop_note", { text: `${R.txt}! 월급 +${wage}G, 경험 +${R.xp}`, wage }),
+    ]);
+    out.push(id);
+  }
+  return { credited: out };
+});
+// 선원이 만든 음식을 선장에게 올린다 (선원 주방)
+route("POST", "/api/crew/serve", async ({ env, user, body }) => {
+  const item = String(body.item || "");
+  if (!/^[가-힣A-Za-z0-9 ·'-]{1,16}$/.test(item)) throw bad("올릴 수 없는 물건입니다.");
+  const c = await crewRowOf(env, user.id);
+  if (!c) throw bad("탑승한 배가 없습니다.");
+  const t = now();
+  if ((await first(env, "SELECT COUNT(*) n FROM deliveries WHERE user_id=? AND claimed IS NULL AND kind='crew_work'", c.captain_id)).n >= 15) throw bad("선장이 한동안 자리를 비워 일이 쌓여 있습니다.");
+  if (!(await takeCooldown(env, user.id, "serve", 45_000, t))) throw bad("방금 올렸습니다. 잠시 후에 다시.");
+  await dlv(env, c.captain_id, "crew_work", { by: user.username, duty: "배식", items: { [item]: 1 },
+    text: rpick([`선원 ${user.username}이(가) 직접 만든 ${item}을(를) 쟁반에 받쳐 들고 왔다.`, `${user.username}이(가) 김이 오르는 ${item}을(를) 선장 앞에 내려놓았다. \"드셔 보세요!\"`, `선실 한쪽에 ${user.username}이(가) 만든 ${item}이(가) 놓여 있다. 정성이 느껴진다.`]) }).run();
+  return { ok: true };
+});
+// 선원이 자기 몫의 음식을 먹고 컨디션을 회복한다 (회복량은 허기 회복량의 절반, 최대 20)
+route("POST", "/api/crew/eat", async ({ env, user, body }) => {
+  const t = now(), v = Math.floor(num(body.v, 1, 80, 10));
+  const p = await profile(env, user.id), cur = condNow(p, t);
+  if (cur >= 98) throw bad("배가 부르고 기운이 넘칩니다.");
+  if (!(await takeCooldown(env, user.id, "eat", 15_000, t))) throw bad("방금 먹었습니다.");
+  const cond = Math.min(100, cur + Math.min(20, Math.round(v / 2)));
+  await run(env, "UPDATE crew_profile SET cond=?, cond_at=? WHERE user_id=?", cond, t, user.id);
+  return { ok: true, cond };
+});
+// 선원 개인 보관함·일지 (선원 주방/소지품 탭)
+route("GET", "/api/crewstate", async ({ env, user }) => {
+  const r = await first(env, "SELECT data,updated FROM crew_state WHERE user_id=?", user.id);
+  return r ? { data: r.data } : { data: null };
+});
+route("PUT", "/api/crewstate", async ({ env, user, body }) => {
+  await limit(env, "cstate:" + user.id, 20, 60_000);
+  if (typeof body.data !== "string" || body.data.length > 60_000) throw bad("저장 데이터가 너무 큽니다.");
+  await run(env, `INSERT INTO crew_state(user_id,data,updated) VALUES(?1,?2,?3) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data,updated=excluded.updated`, user.id, body.data, now());
+  return { ok: true };
+}, { maxBody: 70_000 });
 route("POST", "/api/crew/withdraw", async ({ env, user }) => {
   const p = await first(env, "SELECT purse FROM crew_profile WHERE user_id=?", user.id);
   if (!p || p.purse <= 0) throw bad("찾을 월급이 없습니다.");

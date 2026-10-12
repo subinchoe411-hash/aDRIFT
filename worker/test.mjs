@@ -1,4 +1,6 @@
-// node --test server/test.mjs  — 임시 DB 로 서버를 띄워 주요 흐름을 점검한다
+// node --test worker/test.mjs
+// 임시 DB 로 `wrangler dev`(실제 Workers 런타임 + 로컬 D1)를 띄워 주요 흐름을 점검한다.
+// 이미 떠 있는 서버를 시험하려면 TEST_BASE / TEST_ADMIN_KEY 를 준다.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -6,14 +8,12 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-// TEST_BASE / TEST_ADMIN_KEY 를 주면 이미 떠 있는 서버(예: wrangler dev)를 시험하고, 없으면 Node 서버를 직접 띄운다.
-const PORT = 3200 + Math.floor(Math.random() * 500), BASE = process.env.TEST_BASE || `http://127.0.0.1:${PORT}`, KEY = process.env.TEST_ADMIN_KEY || "k3y-test-admin-key";
+const PORT = 8800 + Math.floor(Math.random() * 150), BASE = process.env.TEST_BASE || `http://127.0.0.1:${PORT}`, KEY = process.env.TEST_ADMIN_KEY || "test-admin-key-0123";
 let proc;
 test.before(async () => {
-  if (!process.env.TEST_BASE) proc = spawn(process.execPath, ["server/server.js"], {
-    env: { ...process.env, PORT, ADMIN_KEY: KEY, REG_LIMIT: "1000", DATA_DIR: mkdtempSync(join(tmpdir(), "adrift-")) }, stdio: "ignore",
-  });
-  for (let i = 0; i < 100; i++) { try { await fetch(BASE + "/api/me"); return; } catch { await new Promise((r) => setTimeout(r, 200)); } }
+  if (!process.env.TEST_BASE) proc = spawn("npx", ["wrangler", "dev", "--local", "--port", String(PORT), "--ip", "127.0.0.1",
+    "--persist-to", mkdtempSync(join(tmpdir(), "adrift-")), "--var", `ADMIN_KEY:${KEY}`, "--var", "REG_LIMIT:1000"], { stdio: "ignore" });
+  for (let i = 0; i < 150; i++) { try { await fetch(BASE + "/api/me"); return; } catch { await new Promise((r) => setTimeout(r, 300)); } }
   throw new Error("서버가 뜨지 않음");
 });
 test.after(() => proc && proc.kill());
@@ -140,4 +140,98 @@ test("클라우드 저장", async () => {
   assert.equal((await call("/api/save", undefined, a.tok)).data, null);
   assert.equal((await call("/api/save", { data: '{"x":1}' }, a.tok, "PUT")).status, 200);
   assert.equal((await call("/api/save", undefined, a.tok)).data, '{"x":1}');
+});
+
+test("선원 개편: 직책, 컨디션, 일 7종, 월급 보너스", async () => {
+  const cap = await join_("cap2"), mate = await join_("mate2");
+  await sync(cap.tok, me({ name: "선장" }));
+  await call("/api/crew/invite", { username: "mate2" }, cap.tok);
+  const inv = (await sync(mate.tok, me({ name: "선원" }))).crew.invitesIn[0];
+  await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
+
+  assert.equal((await call("/api/crew/role", { role: "마법사" }, mate.tok)).status, 400, "없는 직책");
+  assert.equal((await call("/api/crew/role", { role: "요리사" }, mate.tok)).status, 200);
+  assert.equal((await call("/api/crew/role", { role: "망꾼" }, mate.tok)).status, 400, "직책은 5분에 한 번");
+  let s = await sync(mate.tok, me({ name: "선원" }));
+  assert.equal(s.crew.me.role, "요리사");
+  assert.equal(s.crew.me.cond, 100);
+  let c = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0];
+  assert.equal(c.role, "요리사");
+  assert.equal(c.online, false, "선원 화면에 들어오기 전엔 접속 중이 아님");
+  await call("/api/sync", { crew: true }, mate.tok);
+  c = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0];
+  assert.equal(c.online, true, "선원 화면의 신호가 선장에게 접속 중으로 보임");
+
+  // 자기 직책의 일은 보너스: 식사 허기 8~15 → x1.5, 월급 +2
+  const w = await call("/api/crew/duty", { duty: "cook" }, mate.tok);
+  assert.equal(w.status, 200);
+  assert.equal(w.bonus, true);
+  assert.equal(w.wage, 5 + 2);
+  assert.equal(w.cond, 88);
+  const d = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_work");
+  assert.match(d.payload.fx, /^f:\d+$/);
+  assert.equal(d.payload.role, "요리사");
+
+  // 새 일들이 모두 동작하고, 컨디션이 바닥나면 쉬어야 한다
+  for (const duty of ["navigate", "haggle", "dive", "repair", "lookout", "fish"]) {
+    const r = await call("/api/crew/duty", { duty }, mate.tok);
+    assert.equal(r.status, 200, duty + " " + JSON.stringify(r));
+  }
+  // 지원(전투 중)까지 하면 컨디션이 바닥난다
+  await sync(cap.tok, me({ name: "선장", snap: { bt: { t: "상어", rd: 1, en: [], al: [] } } }));
+  for (const kind of ["fire", "mend"]) assert.equal((await call("/api/crew/support", { kind }, mate.tok)).status, 200, kind);
+  const tired = await call("/api/crew/duty", { duty: "cook" }, mate.tok);
+  assert.equal(tired.status, 400);
+  assert.match(tired.error, /컨디션/);
+  const rest = await call("/api/crew/rest", {}, mate.tok);
+  assert.equal(rest.status, 200);
+  assert.ok(rest.cond >= 30);
+  assert.equal((await call("/api/crew/rest", {}, mate.tok)).status, 400, "쉬는 것도 쿨다운");
+});
+
+test("전투·잠수 지원, 장면 건의, 공동 보상, 배식, 선원 보관함", async () => {
+  const cap = await join_("cap3"), mate = await join_("mate3"), other = await join_("other3");
+  await call("/api/crew/invite", { username: "mate3" }, cap.tok);
+  await sync(cap.tok, me({ name: "선장" }));
+  const inv = (await sync(mate.tok, me({ name: "선원" }))).crew.invitesIn[0];
+  await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
+
+  // 선장이 싸우고 있지 않으면 지원할 수 없다
+  assert.equal((await call("/api/crew/support", { kind: "fire" }, mate.tok)).status, 400);
+  await sync(cap.tok, me({ name: "선장", snap: { bt: { t: "상어", rd: 1, en: [{ n: "상어", hp: 70, mhp: 70 }], al: [] } } }));
+  const f = await call("/api/crew/support", { kind: "fire" }, mate.tok);
+  assert.equal(f.status, 200);
+  assert.ok(f.power >= 10);
+  assert.equal((await call("/api/crew/support", { kind: "fire" }, mate.tok)).status, 400, "지원 쿨다운");
+  assert.equal((await call("/api/crew/support", { kind: "air" }, mate.tok)).status, 400, "잠수 중이 아니면 공기 보급 불가");
+  const dv = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_support");
+  assert.equal(dv.payload.kind, "fire");
+  assert.equal((await call("/api/crew/support", { kind: "fire" }, other.tok)).status, 400, "선원이 아니면 불가");
+
+  // 장면 건의
+  await sync(cap.tok, me({ name: "선장", snap: { sc: { t: "소용돌이", o: ["밧줄", "해류", "돌파"] } } }));
+  assert.equal((await call("/api/crew/advise", { opt: 5 }, mate.tok)).status, 400);
+  assert.equal((await call("/api/crew/advise", { opt: 1 }, mate.tok)).status, 200);
+  const adv = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_advice");
+  assert.equal(adv.payload.opt, 1);
+
+  // 공동 보상: 이 선장의 선원에게만
+  const m = (await sync(cap.tok, me({ name: "선장" }))).crew.captainOf[0];
+  const co = await call("/api/crew/coop", { kind: "battle", ids: [m.id, other.id] }, cap.tok);
+  assert.deepEqual(co.credited, [m.id]);
+  assert.equal((await call("/api/crew/coop", { kind: "battle", ids: [m.id] }, cap.tok)).status, 429, "분당 한 번");
+  assert.equal((await call("/api/crew/coop", { kind: "x", ids: [m.id] }, cap.tok)).status, 400);
+  const note = (await sync(mate.tok, me({ name: "선원" }))).deliveries.find((x) => x.kind === "coop_note");
+  assert.match(note.payload.text, /월급 \+15G/);
+
+  // 배식
+  assert.equal((await call("/api/crew/serve", { item: "고등어구이" }, mate.tok)).status, 200);
+  assert.equal((await call("/api/crew/serve", { item: "<script>" }, mate.tok)).status, 400);
+  const sv = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_work" && x.payload.duty === "배식");
+  assert.equal(sv.payload.items["고등어구이"], 1);
+
+  // 선원 보관함 저장
+  assert.equal((await call("/api/crewstate", undefined, mate.tok)).data, null);
+  assert.equal((await call("/api/crewstate", { data: '{"bag":{"멸치":2}}' }, mate.tok, "PUT")).status, 200);
+  assert.equal((await call("/api/crewstate", undefined, mate.tok)).data, '{"bag":{"멸치":2}}');
 });

@@ -1,4 +1,5 @@
-// D1 테이블. 처음 요청이 왔을 때 테이블이 없으면 자동으로 만든다 (별도 마이그레이션 명령 불필요).
+// D1 테이블. 처음 요청이 왔을 때 테이블이 없으면 자동으로 만들고, 버전이 오르면 필요한 변경을 자동으로 적용한다
+// (별도 마이그레이션 명령 불필요). 새 버전을 추가할 땐 MIGRATIONS 에 한 줄을 더하고 SCHEMA_VERSION 을 올린다.
 export const SCHEMA = [
 `CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE, salt TEXT NOT NULL, hash TEXT NOT NULL, invite TEXT, created INTEGER NOT NULL)`,
 `CREATE TABLE IF NOT EXISTS invites(code TEXT PRIMARY KEY, note TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, expires INTEGER NOT NULL, used_by INTEGER, used_at INTEGER)`,
@@ -22,4 +23,17 @@ export const SCHEMA = [
 `CREATE TABLE IF NOT EXISTS saves(user_id INTEGER PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL)`,
 // Workers 는 요청마다 다른 곳에서 실행될 수 있어 속도 제한 카운터도 DB 에 둔다
 `CREATE TABLE IF NOT EXISTS rl(k TEXT PRIMARY KEY, r INTEGER NOT NULL, n INTEGER NOT NULL)`,
+];
+
+// 이미 배포된 DB 를 새 버전으로 올리는 변경들. 각 문장은 개별로 실행하고 '이미 있음' 오류는 무시한다.
+export const SCHEMA_VERSION = 3;
+export const MIGRATIONS = [
+  // v2: 선원 개편 (직책, 컨디션, 개인 보관함)
+  `ALTER TABLE crew_profile ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE crew_profile ADD COLUMN cond INTEGER NOT NULL DEFAULT 100`,
+  `ALTER TABLE crew_profile ADD COLUMN cond_at INTEGER NOT NULL DEFAULT 0`,
+  `CREATE TABLE IF NOT EXISTS crew_state(user_id INTEGER PRIMARY KEY, data TEXT NOT NULL, updated INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS meta(k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
+  // v3: 선원 화면에 접속 중인지 (선원은 배 위치 신호를 보내지 않으므로 따로 기록)
+  `ALTER TABLE crew_profile ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`,
 ];
