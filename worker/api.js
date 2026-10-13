@@ -420,7 +420,9 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
 
   // 2차: 채팅(월드 + 내 배)과 선원 상세
   const myShip = crewRow ? crewRow.captain_id : user.id;
-  const chans = ["world", "crew:" + myShip];
+  // 같은 섬(부두·상륙 중)에 있는 사람끼리의 채팅
+  const place = mine && mine.loc === "port" && mine.isl >= 0 && t - mine.updated < FRESH * 2 ? "place:" + mine.isl : null;
+  const chans = ["world", "crew:" + myShip, ...(place ? [place] : [])];
   const since = body.since && typeof body.since === "object" ? body.since : {};
   const stm2 = chans.map((ch) => typeof since[ch] === "number"
     ? P(env, "SELECT id,user_id uid,name,text,ts FROM chat WHERE channel=? AND id>? ORDER BY id LIMIT 60", ch, since[ch])
@@ -453,7 +455,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   }
 
   return {
-    now: t, nearby, chat, crew, radius: R, roster: rosterR,
+    now: t, nearby, chat, crew, radius: R, roster: rosterR, place,
     sto: sto ? { items: sto.items, cap: sto.cap, seq: sto.seq } : undefined,
     deliveries: delivR.map((d) => ({ ...d, payload: json(d.payload) })),
     trades: {
@@ -587,7 +589,11 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const text = cleanStr(body.text, 80);
   if (!text) throw bad("내용이 비었습니다.");
   const ch = String(body.channel || "world");
-  if (ch !== "world") {
+  if (ch.startsWith("place:")) {
+    const n = /^place:(\d{1,3})$/.exec(ch);
+    const pr = n && await first(env, "SELECT loc,isl,updated FROM presence WHERE user_id=?", user.id);
+    if (!pr || pr.loc !== "port" || pr.isl !== Number(n[1]) || now() - pr.updated > 120_000) throw new HttpError(403, "그 장소에 있지 않습니다.");
+  } else if (ch !== "world") {
     const m = /^crew:(\d+)$/.exec(ch);
     if (!m) throw bad("알 수 없는 채널입니다.");
     const cid = Number(m[1]);
@@ -597,7 +603,7 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const p = await first(env, "SELECT name,updated FROM presence WHERE user_id=?", user.id);
   let nm = p ? p.name : user.username;
   // 선원 화면에서 말할 때(배 위치 신호가 없을 때)는 선원 캐릭터 이름으로
-  if (!p || now() - p.updated > 120_000 || ch !== "world") {
+  if (!p || now() - p.updated > 120_000 || (ch !== "world" && !ch.startsWith("place:"))) {
     const cp = await first(env, "SELECT cname FROM crew_profile WHERE user_id=?", user.id);
     if (cp && cp.cname && (await crewRowOf(env, user.id))) nm = cp.cname;
   }

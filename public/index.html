@@ -554,8 +554,14 @@ function loadGame(){try{const raw=localStorage.getItem(SAVE_KEY());if(!raw||raw.
  const base=PO.filter(p=>!p.q);base.forEach((p,i)=>{const x=d.po[i];if(Array.isArray(x)){p.f=x[0]?1:0;p.d=x[1]?1:0;p.h=x[2]?1:0;if(x[3]&&typeof x[3]==="object")p.cs=cleanVal(x[3])}});
  S.quests.forEach(q=>{if(q.poi&&typeof q.poi==="object")PO.push(q.poi)});
  const r=d.refs||{};S.inC=Number.isInteger(r.inC)&&r.inC>=0?base[r.inC]||null:null;S.cur=Number.isInteger(r.cur)&&r.cur>=0?base[r.cur]||null:null;S.view=typeof r.view==="string"&&/^[a-z]{2,12}$/.test(r.view)&&$("v-"+r.view)?r.view:"deck";S.act=null;S.pend=null;S.fg=null;
- say("저장된 항해를 불러왔다.");renderAll();bootLoop();return true}catch(e){return false}}
-function bootLoop(){if(!LOOP)LOOP=setInterval(()=>{if(S&&!S.over){if(!S.bt)tick(1/60);live();if(++ASV>=20){ASV=0;saveGame()}}},1000)}
+ say("저장된 항해를 불러왔다.");renderAll();bootLoop();if(d.at)catchUp((Date.now()-d.at)/60000);return true}catch(e){return false}}
+/* 자리를 비운 동안에도 시간은 흐른다: 닫힌 탭·가려진 탭의 시간을 돌아와서 한꺼번에 계산한다.
+   그동안엔 사건·전투가 일어나지 않고(편안한 항해), 허기는 천천히 줄어 15 밑으로는 내려가지 않는다. 진행 중이던 행동은 이어지지 않는다. */
+let OFFL=false,LASTW=Date.now();
+function catchUp(min){min=Math.min(1440,Math.floor(min));if(!S||S.over||min<2)return;const t0=S.t,x0=S.x,y0=S.y,g0=S.gold,sail0=S.sail;OFFL=true;
+ try{for(let i=0;i<min&&!S.pend&&!S.bt&&!S.over&&!S.inC;i++)tick(1)}finally{OFFL=false}
+ if(min>=5){const nm=Math.hypot(S.x-x0,S.y-y0);say(`자리를 비운 사이 ${[min>=60?Math.floor(min/60)+"시간":"",min%60?min%60+"분":""].filter(Boolean).join(" ")}이 흘렀다.`+(sail0&&nm>.2?` 배는 ${nm.toFixed(1)}해리를 나아갔다.`:"")+(S.gold>g0?` 골드 +${S.gold-g0}`:""));renderAll()}}
+function bootLoop(){if(!LOOP){LASTW=Date.now();LOOP=setInterval(()=>{if(S&&!S.over){const n=Date.now(),dm=(n-LASTW)/60000;LASTW=n;if(!S.bt){if(dm>.1)catchUp(dm);else tick(dm)}live();if(++ASV>=20){ASV=0;saveGame()}}},1000)}}
 function manualSave(){$("svm").textContent=saveGame()?"저장했다 ("+clock()+")":"이 환경에서는 저장할 수 없다 (브라우저 저장소가 막혀 있음)."}
 function resetGame(){if(!RG){RG=1;$("svm").textContent="저장을 지우고 처음부터 시작합니다. 한 번 더 누르면 실행됩니다.";return}try{localStorage.removeItem(SAVE_KEY())}catch(e){}window.Online&&Online.clearCloud&&Online.clearCloud();location.reload()}
 function resume(){if(!loadGame())$("tbtn").innerHTML+="<div class='sub sm'>저장을 불러오지 못했다.</div>"}
@@ -935,7 +941,7 @@ function event(){if(S.dk>=0||S.isl!==null||S.inC||S.pend)return;const h=Math.flo
  else if(r<18+L)say("낯선 상선과 마주쳤다. 물자를 나누고 "+fx(`g:${5+R(20)}`));
  else if(r<28+L){const it=pick(["목재","럼","달걀"]);say("표류물을 건졌다. "+fx(`i:${it}:1`))}
  else if(r<36)say(pick(["멀리서 고래가 숨을 뿜는다.","돌고래 떼가 뱃머리를 따라온다.","갈매기 한 마리가 마스트에 앉았다 간다.","물빛이 갑자기 짙은 청록으로 변한다."]))}
-function tick(dt){S.t+=dt;S.hun=Math.max(0,S.hun-dt/6*(1+M("hun"))*dfx().hun);if(S.auto.on&&S.hun<=S.auto.th)autoLoop();if(S.hun<=0)S.hp-=dt/15;else if(S.hun>40)S.hp=Math.min(hpm(),S.hp+dt/45);efTick(dt);S.ct.gold=Math.max(S.ct.gold||0,S.gold);chkT();chkGoals();
+function tick(dt){S.t+=dt;S.hun=Math.max(OFFL?Math.min(S.hun,15):0,S.hun-dt/6*(1+M("hun"))*dfx().hun*(OFFL?.4:1));if(S.auto.on&&S.hun<=S.auto.th)autoLoop();if(S.hun<=0)S.hp-=dt/15;else if(S.hun>40)S.hp=Math.min(hpm(),S.hp+dt/45);efTick(dt);S.ct.gold=Math.max(S.ct.gold||0,S.gold);chkT();chkGoals();
  if(S.hp<=0){const st=S.hun<=0;S.hp=hpm()*.4;S.hun=Math.max(S.hun,st?35:30);S.t+=480;ct("faint");say(st?"허기와 체력이 모두 바닥나 쓰러졌다. 지나가던 어선이 구해 주먹밥을 나눠 주었고, 8시간 뒤에야 눈을 떴다.":"정신을 잃었다가 8시간 뒤 깨어났다.");if(S.inC){S.inC=null;S.cur=null;S.pend=null;S.act=null;S.view="deck"}renderAll()}S.wind=(S.wind+(rnd()-.5)*dt*.5+360)%360;S.ws=Math.min(1.7,Math.max(.4,S.ws+(rnd()-.5)*dt*.012));
  if(S.sail&&S.man){const rf=inReef(S.x,S.y),cb=curBoost(),st=kn()/60*dt*(rf?(S.sl===1?.55:.7):1),a=rad(S.hd),nx=S.x+Math.sin(a)*st,ny=S.y-Math.cos(a)*st;if(landAt(nx,ny)){S.sail=false;S.hull-=6;say("얕은 곳에 부딪혔다! 선체가 상했다. 닻을 내렸다.");renderAll()}else{S.x=nx;S.y=ny;ct("nm",st);ct("mnm",st);if(cb>0)ct("cur",st);if(rf&&S.sl>1){S.hull-=dt*.35;if(S.t-S.sm>45){S.sm=S.t;say("암초에 선체가 긁힌다! 돛을 접고 천천히 지나자.")}}}}
  else if(S.sail&&S.path.length){let rem=kn()/60*dt;while(rem>0&&S.path.length){const[w,z]=S.path[0],dx=w-S.x,dy=z-S.y,d=Math.hypot(dx,dy);S.hd=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;
@@ -947,7 +953,7 @@ function tick(dt){S.t+=dt;S.hun=Math.max(0,S.hun-dt/6*(1+M("hun"))*dfx().hun);if
  const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
  const dk=S.sail?-1:I.findIndex(w=>TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
  if(S.act){S.act.l-=dt;if(S.act.l<=0){const f=S.act.fn;S.act=null;f();renderAll()}}
- S.acc+=dt;while(S.acc>=60){S.acc-=60;event()}S.acc2+=dt;while(S.acc2>=10){S.acc2-=10;small()}
+ S.acc+=dt;while(S.acc>=60){S.acc-=60;if(!OFFL)event()}S.acc2+=dt;while(S.acc2>=10){S.acc2-=10;if(!OFFL)small()}
  S.out.forEach(b=>{if(!b.r&&S.t>=b.due+(b.srv?4320:0)&&S.isl===null&&!S.inC){b.r=1;const rp=pick(REPLY),r=fx(rp[2]);S.mail.unshift({from:rp[0],text:rp[1],t:clock(),re:b.text});S.mail.length=Math.min(S.mail.length,40);say("누군가 당신의 병 편지를 주웠다! 답장이 파도에 실려 왔다.");say("※ "+rp[0]+": “"+rp[1]+"” "+r);renderAll()}})
  if(S.hull<=0){S.hull=Math.round(hm()*.4);S.sail=false;S.man=false;S.tx=null;S.path=[];S.act=null;S.pend=null;S.bt=null;S.inC=null;S.cur=null;S.isl=null;S.view="deck";S.x=I[0].dx;S.y=I[0].dy;S.dk=0;S.t+=360;ct("rescued");say("선체가 부서지기 직전, 지나던 어선단이 배를 예인해 첫걸음 섬 부두로 데려다 주었다. 선체는 40%만 고쳐져 있다. (6시간이 지났다)");renderAll()}}
 function endGame(t,m){try{localStorage.removeItem(SAVE_KEY())}catch(e){}S.over=true;S.act=null;S.pend=null;S.inC=null;S.bt=null;const d=$("dead");d.hidden=false;d.innerHTML=`<svg viewBox="0 0 48 48" style="width:56px;border:0;cursor:default;fill:none;stroke:var(--sub);stroke-width:1.5;margin-bottom:10px"><path d="M24 6v28M14 14h20M10 34c0 6 6 8 14 8s14-2 14-8M10 34l6-4M38 34l-6-4"/></svg><h1 style="font-size:22px">${t}</h1><p class="sub" style="max-width:420px">${m}</p><p class="sm sub">${Math.floor(S.t/1440)+1}일째 · 방문한 섬 ${I.filter(w=>w.v).length}곳 · 최종 골드 ${S.gold}G · 칭호 ${S.tt.size}개</p><button onclick="location.reload()" style="padding:8px 22px">새 항해를 시작한다</button>`;say(t);renderAll()}

@@ -224,7 +224,7 @@ O.reply=async bid=>{
 
 /* ================= 채팅 ================= */
 const CH={world:[]};let curCh="world";const unread={};
-function chName(ch){return ch==="world"?"월드":"선원"}
+function chName(ch){return ch==="world"?"월드":ch.startsWith("place:")?"이곳":"선원"}
 function chatAdd(ch,list){
   const a=CH[ch]||(CH[ch]=[]);
   for(const m of list){if(!a.some(x=>x.id===m.id)){a.push(m);if(ch!==curCh)unread[ch]=1}}
@@ -232,8 +232,8 @@ function chatAdd(ch,list){
 function myCrewCh(){const r=O.data;if(!r)return null;return r.crew.memberOf?"crew:"+r.crew.memberOf.captainId:(r.crew.captainOf.length?"crew:"+O.user.id:null)}
 function renderChat(){
   const box=$("chl");if(!box||!O.on)return;
-  const cc=myCrewCh();if(curCh!=="world"&&curCh!==cc)curCh="world";
-  const h=$("chh");if(h){h.innerHTML=`채팅 <span style="font-weight:400">`+[["world",1],[cc,!!cc]].filter(x=>x[1]).map(([c])=>`<a onclick="Online.setCh('${c}')" style="${c===curCh?"font-weight:700":""}">${chName(c)}${unread[c]?" ●":""}</a>`).join("")+`</span>`}
+  const cc=myCrewCh(),pc=O.data&&O.data.place||null;if(curCh!=="world"&&curCh!==cc&&curCh!==pc)curCh="world";
+  const h=$("chh");if(h){h.innerHTML=`채팅 <span style="font-weight:400">`+[["world",1],[pc,!!pc],[cc,!!cc]].filter(x=>x[1]).map(([c])=>`<a onclick="Online.setCh('${c}')" style="${c===curCh?"font-weight:700":""}">${chName(c)}${unread[c]?" ●":""}</a>`).join("")+`</span>`}
   const list=(CH[curCh]||[]).slice().reverse();
   box.innerHTML=list.map(m=>`<div>[${esc(m.name)}] ${esc(m.text)}</div>`).join("")||`<div>(아직 아무도 말하지 않았다)</div>`}
 O.setCh=c=>{curCh=c;unread[c]=0;renderChat()};
