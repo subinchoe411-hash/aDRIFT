@@ -81,10 +81,10 @@ button{padding:7px 11px}.vt{font-size:16px;letter-spacing:.12em}
 .bt-row{cursor:pointer;padding:2px 4px;border-radius:3px}.bt-row.sel{background:var(--sh)}.dead{opacity:.35}.bt-log{margin-top:8px;max-height:120px;overflow:auto}
 .mk{cursor:pointer}.mk .ring{transition:.15s}.mk:hover .ring{stroke:var(--acc)}.mk:hover text{fill:var(--acc)}
 /* ===== 청록 해도: 평평한 종이, 가는 잉크 선 ===== */
-body{background:var(--bg);font-family:"Pretendard","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;transition:background-color .8s,color .8s}
-h1,.vt,#title h1{font-family:"Nanum Myeongjo","Noto Serif KR",Georgia,serif}
+body{background:var(--bg);font-family:"Noto Serif KR","Nanum Myeongjo","Batang",Georgia,serif;transition:background-color .8s,color .8s}
 h2{display:block;text-align:left;margin:14px 0 8px;padding:0 0 4px;border:0;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--acc2)}
-h2::before,h2::after{content:none!important}
+h2::after{content:none!important}
+h2::before{content:"◆"!important;color:var(--acc);font-size:7px;margin-right:7px;vertical-align:2px;display:inline}
 .card>h2:first-child,.pan .two>div>h2:first-child,#side h2{display:block;margin:0 0 10px!important;padding:0 0 5px!important;background:none!important;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important}
 #side h2{margin:14px 0 8px!important}
 h2 .sub{letter-spacing:.04em;font-weight:400}
@@ -112,13 +112,15 @@ a{color:var(--acc2);text-decoration:underline}
 .bar i{border-radius:3px;background:var(--acc2)}
 .bar.w i{background:var(--warn)}
 .crew-row .xpb{border-radius:2px;height:3px;background:var(--hd)}.crew-row .xpb i{border-radius:2px;background:var(--acc2)}
-#side{background:var(--bg2);border-top:0;border-right:1px solid var(--line);box-shadow:none}
+#side{background:var(--bg2);border-top:3px double var(--line);border-right:1px solid var(--line);box-shadow:none}
 #side #sn{font-size:18px;letter-spacing:.04em}
 #rt nav{padding:8px 16px 0;gap:2px;border-bottom:1px solid var(--line)}
 #rt nav button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:7px 16px;margin:0;background:none;color:var(--sub)}
 #rt nav button:hover:not(:disabled){background:none;color:var(--ink)}
 #rt nav button.on{background:none;border-bottom-color:var(--acc);color:var(--ink);font-weight:700}
 #rt nav button::before{content:""!important}
+.vh{border-bottom:3px double var(--line)}
+#qst .q{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:13px}#qst .q i{font-style:normal;color:var(--acc2);flex:none}#qst .q.done{color:var(--sub);text-decoration:line-through}#qst .q small{color:var(--sub);margin-left:auto;white-space:nowrap}#qst h3{margin:10px 0 3px;letter-spacing:.1em}#qst h3:first-child{margin-top:0}
 .pan,.dk{animation:fadein .35s ease both}@keyframes fadein{from{opacity:0}to{opacity:1}}
 #map{max-width:none;background:var(--sea);border:1px solid var(--ink);outline:0;border-radius:3px;box-shadow:none;margin:0}
 .town{border-radius:3px;border-color:var(--line)}
@@ -200,6 +202,7 @@ a{color:var(--acc2);text-decoration:underline}
    <div id="gd" hidden></div>
    <div class="card"><h2>함께하는 선원</h2><div id="crewinfo"></div></div>
    <div class="card"><h2>채팅</h2><div id="chl" class="sub sm lg"></div><input id="ct" maxlength="80" placeholder="말을 입력하고 Enter" style="width:100%;margin-top:6px"></div>
+   <div class="card" id="qcard"><h2>퀘스트</h2><div id="qst"></div></div>
   </div>
  </div>
  <div id="v-island" class="pan" hidden></div><div id="v-city" class="pan" hidden></div><div id="v-kitchen" class="pan" hidden></div><div id="v-cabin" class="pan" hidden></div><div id="v-storage" class="pan" hidden></div><div id="v-inv" class="pan" hidden></div>
@@ -497,7 +500,9 @@ if(typeof addEventListener==="function")addEventListener("resize",setView);
 const GOALS=[["첫 낚시를 해 보자","fish",1,"g:15"],["직접 낚시를 성공시키자","fgh",1,"g:20"],["주방에서 요리를 만들어 보자","cook",1,"g:15"],["음식을 먹어 보자","eat",1,"g:10"],["가까운 섬에 상륙하자","isl2",1,"g:30"],["섬을 탐색해 보자","srch",1,"i:목재:2"],["망보기를 해 보자","look",1,"g:15"],["보물을 인양하자","tre",1,"g:40"],["물건을 팔아 보자","sell",1,"g:15"],["병 편지를 띄워 보자","sent",1,"m:1"],["수동 조타로 5해리 항해하자","mnm",5,"g:25"],["수배 의뢰를 맡아 보자","acc",1,"g:30"],["해류를 타고 3해리 가자","cur",3,"g:30"],["해저 도시를 탐험하자","dive",1,"g:60"]];
 function chkGoals(){GOALS.forEach(([t,k,th,r],i)=>{if(!S.gd.has(i)&&cv(k)>=th){S.gd.add(i);say("항해 수첩 완료 — "+t+" "+fx(r));flush();renderAll()}})}
 const gprog=([t,k,th])=>th>1?` (${Math.min(th,Math.floor(cv(k)*10)/10)}/${th})`:"";
-function rGoals(){}
+function rGoals(){const e=$("qst");if(!e)return;const open=GOALS.map((g,i)=>[g,i]).filter(x=>!S.gd.has(x[1])),q=S.quests;
+ e.innerHTML=`<h3>맡은 의뢰</h3>`+(q.length?q.map(x=>`<div class="q"><i>◆</i><span><b>${esc(x.name)}</b> <span class="sub sm">${x.state==="captured"?"포박 완료 → "+esc(I[x.home].n)+"에 인도":"바다 어딘가에서 추적 중"}</span></span><small>${x.reward}G</small></div>`).join(""):`<div class="sub sm">맡은 의뢰가 없다. 항구 게시판에서 수배를 맡을 수 있다.</div>`)
+ +`<h3>항해 목표 ${S.gd.size}/${GOALS.length}</h3>`+(open.length?open.slice(0,4).map(([g])=>`<div class="q"><i>□</i><span>${g[0]}</span><small>${gprog(g)}</small></div>`).join(""):`<div class="sub sm">모든 목표를 달성했다.</div>`)}
 function goalsHTML(){return `<h2>항해 수첩 ${S.gd.size}/${GOALS.length}</h2>`+GOALS.map((g,i)=>`<div class="${S.gd.has(i)?"sub":""}">${S.gd.has(i)?"■":"□"} ${g[0]}<span class="sub sm">${S.gd.has(i)?"":gprog(g)}</span></div>`).join("")}
 /* ---- 저장 / 불러오기 (브라우저 저장). ship=배의 공용 상태, captain=개인 상태 ---- */
 const SHIP_KEYS=new Set(["t","x","y","hd","tx","ty","path","sail","man","sl","wind","ws","boost","hull","lv","sto","dk","isl","acc","acc2","spd","lk"]),SKIP=new Set(["act","pend","fg","fgi","bj","bjo","sel2","selS","sideOpen","cur","curQ","curP","curB","inC","view","bt","bld","spot","logs"]);
