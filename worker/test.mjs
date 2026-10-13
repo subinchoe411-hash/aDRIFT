@@ -286,3 +286,21 @@ test("배 창고: 선장 변화 반영, 선원 넣기·꺼내기, 중복 전송 
   const fin = (await sync(mate.tok, me({}))).crew.memberOf.sto.items["멸치"] || 0;
   assert.equal(fin, 4 - okN);
 });
+
+test("장소 채팅: 같은 섬에 있는 사람끼리만", async () => {
+  const a = await join_("plca"), b = await join_("plcb"), c = await join_("plcc");
+  const at = (n) => me({ loc: "port", isl: n });
+  await sync(a.tok, at(3)); await sync(b.tok, at(3)); await sync(c.tok, at(4));
+  const ra = await sync(a.tok, at(3));
+  assert.equal(ra.place, "place:3");
+  assert.equal((await call("/api/chat", { channel: "place:3", text: "안녕" }, a.tok)).status, 200);
+  assert.equal((await call("/api/chat", { channel: "place:3", text: "침입" }, c.tok)).status, 403, "다른 섬에서는 못 쓴다");
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal((await call("/api/chat", { channel: "place:99", text: "x" }, a.tok)).status, 403);
+  const seen = (r) => (r.chat["place:3"] || []).map((m) => m.text);
+  assert.deepEqual(seen(await sync(b.tok, at(3))), ["안녕"]);
+  const rc = await sync(c.tok, at(4));
+  assert.equal(rc.place, "place:4"); assert.deepEqual(rc.chat["place:3"], undefined);
+  const sea = await sync(a.tok, me({ loc: "sea" }));
+  assert.equal(sea.place, null);
+});

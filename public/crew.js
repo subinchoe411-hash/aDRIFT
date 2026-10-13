@@ -295,17 +295,18 @@ function side(){
 /* ---- 갑판 ---- */
 function mapSvg(sh,sn){
  const x=sh.x,y=sh.y,seen=new Set(sn.seen||[]);I.forEach((w,i)=>{if(i===0)seen.add(0)});
- let s=`<g transform="translate(${VW/2-x*K},${VH/2-y*K})"><rect x="${(x-20)*K}" y="${(y-16)*K}" width="${40*K}" height="${32*K}" fill="url(#wv)"/><g stroke="var(--line)" stroke-width=".6" stroke-dasharray="1 6" stroke-opacity=".8">`;
+ let s=`<g transform="translate(${VW/2-x*K},${VH/2-y*K})"><g stroke="var(--line)" stroke-width=".5">`;
  for(let gx=Math.floor((x-16)/5)*5;gx<x+16;gx+=5)s+=`<line x1="${gx*K}" y1="${(y-12)*K}" x2="${gx*K}" y2="${(y+12)*K}"/>`;
  for(let gy=Math.floor((y-12)/5)*5;gy<y+12;gy+=5)s+=`<line x1="${(x-16)*K}" y1="${gy*K}" x2="${(x+16)*K}" y2="${gy*K}"/>`;s+=`</g>`;
  const vv=sn.vr||6;
  I.forEach((w,i)=>{if(!seen.has(i))return;const dx=dl(w.x-x,WW),dy=dl(w.y-y,WH);if(Math.abs(dx)>VW/2/K+w.rm+1||Math.abs(dy)>VH/2/K+w.rm+1)return;
   const ox=Math.round((x+dx-w.x)/WW)*WW*K,oy=Math.round((y+dy-w.y)/WH)*WH*K,dd=Math.hypot(dx,dy),op=dd-w.rm<=vv?1:.6,na=Math.max(.3,Math.min(1,1.2-dd/(vv*1.2)));
-  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="url(#ht)"/><path d="${w.p}" fill="var(--land)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="${w.p3}" fill="var(--hi)" fill-opacity=".55"/><text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.n}</text></g>`});
+  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="var(--sh)"/><path d="${w.p}" fill="var(--land)" stroke="var(--sub)" stroke-width="1"/><path d="${w.p3}" fill="var(--hi)"/><text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.n}</text></g>`});
  s+=`<circle cx="${x*K}" cy="${y*K}" r="${vv*K}" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>`;
  if(sn.tx!=null)s+=`<line x1="${x*K}" y1="${y*K}" x2="${(x+dl(sn.tx-x,WW))*K}" y2="${(y+dl(sn.ty-y,WH))*K}" stroke="var(--acc)" stroke-dasharray="4 4"/><circle cx="${(x+dl(sn.tx-x,WW))*K}" cy="${(y+dl(sn.ty-y,WH))*K}" r="4" fill="none" stroke="var(--acc)"/>`;
  s+=`</g><g transform="translate(${VW/2},${VH/2}) rotate(${sh.hd}) scale(${[1.3,1.1,.95,.85][sh.lv||0]})">${shipG(sh.lv||0)}</g>`;
  if(sn.wind!=null)s+=`<g transform="translate(${VW-28},${VH-40}) rotate(${sn.wind})" stroke="var(--sub)" fill="none"><line y1="14" y2="-14"/><path d="M-4,-8 L0,-14 L4,-8"/></g><text x="${VW-28}" y="${VH-12}" font-size="8" text-anchor="middle" fill="var(--sub)">바람</text>`;
+ s+=`<g transform="translate(34,36)" fill="none" stroke="var(--sub)"><circle r="17"/><circle r="13" stroke-dasharray="1 3"/><path d="M0,-15 L3,-3 L15,0 L3,3 L0,15 L-3,3 L-15,0 L-3,-3Z" fill="var(--hi)"/><path d="M0,-15 L3,-3 L-3,-3Z" fill="var(--warn)" stroke="none"/><text y="-21" font-size="9" text-anchor="middle" fill="var(--warn)" stroke="none">N</text></g>`;
  return s}
 const cb=(label,fn,dis,pri,attr)=>`<button class="${pri?"pri":""}" ${attr||""} onclick="${fn}" ${dis?"disabled":""}>${label}</button>`;
 const gp=(t,b,h)=>`<div class="grp"><div class="gt">${t}</div><div class="gb">${b}${h?`<div class="sub sm" style="margin-top:2px">${h}</div>`:""}</div></div>`;
