@@ -7,24 +7,24 @@
 const O=window.Online;if(!O)return;
 const RANKS=["견습 선원","갑판원","숙련 선원","갑판장"],RXP=[0,20,60,150];
 const ROLES=[
- ["낚시꾼","釣","낚시 수확↑ · 전투 때 포격 지원이 강해짐"],
- ["요리사","炊","식사 효과↑ · 전투 때 응급처치가 강해짐"],
- ["망꾼","望","망보기에서 더 많이 발견 · 교란 지원이 오래감"],
- ["정비공","匠","수리량↑ · 방패 태세 지원이 2턴 지속"],
- ["항해사","航","항로 점검으로 배가 크게 빨라짐"],
- ["상인","商","물물교환 수익↑"],
- ["잠수부","潛","잠수 수색↑ · 공기 보급·구조 줄 지원이 강해짐"]];
+ ["낚시꾼","","낚시 수확↑ · 전투 때 포격 지원이 강해짐"],
+ ["요리사","","식사 효과↑ · 전투 때 응급처치가 강해짐"],
+ ["망꾼","","망보기에서 더 많이 발견 · 교란 지원이 오래감"],
+ ["정비공","","수리량↑ · 방패 태세 지원이 2턴 지속"],
+ ["항해사","","항로 점검으로 배가 크게 빨라짐"],
+ ["상인","","물물교환 수익↑"],
+ ["잠수부","","잠수 수색↑ · 공기 보급·구조 줄 지원이 강해짐"]];
 const ROLE_TXT=Object.fromEntries(ROLES.map(r=>[r[0],r]));
 const DUTY=[
- ["fish","釣","낚시","낚시꾼","생선을 선장에게 올린다 (한 마리는 내 몫)"],
- ["cook","炊","식사 준비","요리사","선장의 허기를 달랜다"],
- ["lookout","望","망보기","망꾼","새 섬이나 보물 단서를 찾는다"],
- ["repair","匠","선체 수리","정비공","선체를 고친다"],
- ["navigate","航","항로 점검","항해사","배가 한동안 빨라진다"],
- ["haggle","商","물물교환","상인","선장에게 용돈을 벌어 준다"],
- ["dive","潛","잠수 수색","잠수부","바닥을 훑어 조개·해초를 건진다"]];
-const BSUP=[["fire","砲","포격 지원","적 하나를 크게 때린다"],["mend","醫","응급처치","가장 다친 사람을 치료한다"],["guard","盾","방패 태세","선장 앞을 막아 피해를 줄인다"],["distract","惑","교란","적이 한 턴 움직이지 못한다"]];
-const DSUP=[["air","氣","공기 보급","선장의 산소를 채운다"],["rescue","繩","구조 줄","선장의 체력을 회복시킨다"]];
+ ["fish","","낚시","낚시꾼","생선을 선장에게 올린다 (한 마리는 내 몫)"],
+ ["cook","","식사 준비","요리사","선장의 허기를 달랜다"],
+ ["lookout","","망보기","망꾼","새 섬이나 보물 단서를 찾는다"],
+ ["repair","","선체 수리","정비공","선체를 고친다"],
+ ["navigate","","항로 점검","항해사","배가 한동안 빨라진다"],
+ ["haggle","","물물교환","상인","선장에게 용돈을 벌어 준다"],
+ ["dive","","잠수 수색","잠수부","바닥을 훑어 조개·해초를 건진다"]];
+const BSUP=[["fire","","포격 지원","적 하나를 크게 때린다"],["mend","","응급처치","가장 다친 사람을 치료한다"],["guard","","방패 태세","선장 앞을 막아 피해를 줄인다"],["distract","","교란","적이 한 턴 움직이지 못한다"]];
+const DSUP=[["air","","공기 보급","선장의 산소를 채운다"],["rescue","","구조 줄","선장의 체력을 회복시킨다"]];
 const plain=t=>O.plain(t);
 // 받침에 따라 이/가, 은/는, 을/를, 과/와 를 맞춘다 (한글이 아니면 받침 없음으로 본다)
 const batchim=w=>{const ch=String(w).trim().slice(-1),c=ch.charCodeAt(0);if(/[0-9]/.test(ch))return "013678".includes(ch);return c>=0xac00&&c<=0xd7a3&&(c-0xac00)%28!==0};
@@ -200,7 +200,7 @@ function crewRow(o){
  const ri=Math.max(0,RANKS.indexOf(o.rank)),next=RXP[ri+1],pc=next?Math.round(100*(o.xp-RXP[ri])/(next-RXP[ri])):100;
  const days=o.joined?Math.max(1,Math.ceil((O.srvNow()-o.joined)/86400000)):0;
  const last=o.on?"접속 중":o.last?`${Math.max(1,Math.round((O.srvNow()-o.last)/60000))}분 전 접속`:"아직 접속 기록 없음";
- return `<div class="crew-row"><div class="av">${o.icon}</div><div class="ci"><div class="cn"><b>${esc(o.name)}</b>${o.tag?` <span class="chip">${esc(o.tag)}</span>`:""}<span class="dot${o.on?" on":""}" title="${last}"></span></div><div class="sub sm">${o.sub||""}${o.rank?`${o.sub?" · ":""}${esc(o.rank)}`:""}${days?` · 승선 ${days}일째`:""}${o.tasks!=null?` · 일한 횟수 ${o.tasks}`:""} · ${last}</div>${o.rank?`<div class="xpb"><i style="width:${pc}%"></i></div>`:""}</div></div>`}
+ return `<div class="crew-row"><div class="av">${esc((o.name||"?").slice(0,1))}</div><div class="ci"><div class="cn"><b>${esc(o.name)}</b>${o.tag?` <span class="chip">${esc(o.tag)}</span>`:""}<span class="dot${o.on?" on":""}" title="${last}"></span></div><div class="sub sm">${o.sub||""}${o.rank?`${o.sub?" · ":""}${esc(o.rank)}`:""}${days?` · 승선 ${days}일째`:""}${o.tasks!=null?` · 일한 횟수 ${o.tasks}`:""} · ${last}</div>${o.rank?`<div class="xpb"><i style="width:${pc}%"></i></div>`:""}</div></div>`}
 O.renderCrewInfo=()=>{
  const el=$("crewinfo");if(!el||!O.data)return;const c=O.data.crew;let h="";
  if(O.crewMode){

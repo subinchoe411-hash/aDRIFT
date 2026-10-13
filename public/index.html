@@ -7,16 +7,12 @@
 <meta http-equiv="Content-Security-Policy" content="connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'">
 <title>표류여행</title>
 <style>
-/* ===== 오래된 해도(양피지) — 시간대별 종이 빛깔 (day 낮 / dusk 저녁 / night 밤 / dawn 새벽) ===== */
-:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
---stain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='700' height='700'><filter id='s' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.006' numOctaves='3' seed='4' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .42  0 0 0 0 .26  0 0 0 0 .08  0 0 0 .8 -.22'/></filter><rect width='100%25' height='100%25' filter='url(%23s)'/></svg>");
---grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .30  0 0 0 0 .18  0 0 0 0 .06  0 0 0 .6 -.2'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
---grainN:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='g' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' seed='9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .85  0 0 0 0 .66  0 0 0 0 .35  0 0 0 .7 -.4'/></filter><rect width='100%25' height='100%25' filter='url(%23g)'/></svg>");
---gr:var(--grain);--bm:normal,normal,multiply,multiply,normal;--vg:rgba(70,40,12,.42);--glow:transparent}
-:root,:root[data-tod="day"]{--bg:#dcc794;--bg2:#ead9aa;--card:#efe1b9;--hd:#dfc98f;--ink:#35261a;--sub:#66502f;--line:#9a7b4a;--acc:#8e2f1c;--acc2:#2f6a68;--on:#f7ecd0;--warn:#a8321e;--land:#d8bf86;--sh:#cbb078;--hi:#c3a56a;--sea:#e8dab0;--shadow:rgba(60,35,10,.45);--sky1:#efe0b0;--sky2:#f4e9c6}
-:root[data-tod="dusk"]{--bg:#d1a874;--bg2:#e3bf8b;--card:#e9cc9c;--hd:#d9b27b;--ink:#3a2012;--sub:#7d5430;--line:#95602f;--acc:#9a2e1a;--acc2:#3a5f60;--on:#f7e6c6;--warn:#a1301a;--land:#cda46a;--sh:#bc9158;--hi:#b78950;--sea:#e4c592;--shadow:rgba(90,40,10,.5);--vg:rgba(95,40,10,.5);--glow:rgba(255,150,60,.16);--sky1:#e8b883;--sky2:#f0d3a2}
-:root[data-tod="dawn"]{--bg:#c4cbb2;--bg2:#d6dcc2;--card:#dfe2c8;--hd:#c8d0b4;--ink:#22302c;--sub:#55675c;--line:#6e8473;--acc:#8a3a28;--acc2:#245c60;--on:#f0efd8;--warn:#a2381f;--land:#c6c498;--sh:#adb89a;--hi:#a0ae90;--sea:#d7dcc1;--shadow:rgba(30,60,55,.45);--vg:rgba(30,60,55,.4);--glow:rgba(200,225,210,.2);--sky1:#cfd9c0;--sky2:#e3e6cc}
-:root[data-tod="night"]{--bg:#18110b;--bg2:#241a10;--card:#2b2016;--hd:#38291a;--ink:#ead8aa;--sub:#a98e5d;--line:#7d6136;--acc:#e3ad4c;--acc2:#6fb0a6;--on:#1d150b;--warn:#ea8861;--land:#40311d;--sh:#251b10;--hi:#4d3b23;--sea:#1e1711;--shadow:rgba(0,0,0,.75);--gr:var(--grainN);--bm:normal,normal,screen,multiply,normal;--vg:rgba(0,0,0,.65);--glow:rgba(255,176,80,.16);--sky1:#2a1f13;--sky2:#38291a}
+/* ===== 청록 해도 — 시간대별 종이 빛깔 (day 낮 / dusk 저녁 / night 밤 / dawn 새벽) ===== */
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+:root,:root[data-tod="day"]{--bg:#e4ece6;--bg2:#eef3ee;--card:#f6f8f3;--hd:#d5e2dc;--ink:#10393e;--sub:#4f7273;--line:#8fb0ad;--acc:#a8512b;--acc2:#1f6b70;--on:#f6f8f3;--warn:#a8402b;--land:#e3dcc3;--sh:#cddbd4;--hi:#d2c9aa;--sea:#d3e5e3;--shadow:rgba(10,50,55,.3);--sky1:#d5e2dc;--sky2:#eef3ee}
+:root[data-tod="dusk"]{--bg:#efe4d3;--bg2:#f5ede0;--card:#faf5ea;--hd:#e6d6bd;--ink:#1d3a40;--sub:#6b6a5c;--line:#b9a98c;--acc:#b04a26;--acc2:#2a6a6c;--on:#faf5ea;--warn:#a8402b;--land:#e5d6b4;--sh:#dccdb1;--hi:#d3c19a;--sea:#e1e2d4;--shadow:rgba(80,50,20,.3);--sky1:#e6d6bd;--sky2:#f5ede0}
+:root[data-tod="dawn"]{--bg:#e0e7ea;--bg2:#eaeff1;--card:#f4f7f8;--hd:#d1dce1;--ink:#1c3541;--sub:#5a7482;--line:#9bb2bd;--acc:#a8512b;--acc2:#2b6477;--on:#f4f7f8;--warn:#a8402b;--land:#e0dcc8;--sh:#ccd9df;--hi:#cfcbb1;--sea:#d4e2e8;--shadow:rgba(20,50,70,.3);--sky1:#d1dce1;--sky2:#eaeff1}
+:root[data-tod="night"]{--bg:#0c1e25;--bg2:#10272f;--card:#13303a;--hd:#1a3b46;--ink:#d3e8e2;--sub:#85abab;--line:#2f5d66;--acc:#e0b45a;--acc2:#6fc0b8;--on:#0c1e25;--warn:#ee8c68;--land:#24424a;--sh:#0f242c;--hi:#2e4f58;--sea:#0e242c;--shadow:rgba(0,0,0,.5);--sky1:#10272f;--sky2:#1a3b46}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Serif KR","Nanum Myeongjo",Georgia,serif;line-height:1.6;font-size:14px}
 .scr{max-width:780px;margin:0 auto;padding:56px 24px}.c{text-align:center;padding-top:140px}
@@ -84,64 +80,55 @@ button{padding:7px 11px}.vt{font-size:16px;letter-spacing:.12em}
 .town{width:100%;display:block;border:1px solid var(--line);cursor:default;border-radius:3px}.bd{cursor:pointer}.bd:hover rect,.bd:hover circle{stroke:var(--acc)}
 .bt-row{cursor:pointer;padding:2px 4px;border-radius:3px}.bt-row.sel{background:var(--sh)}.dead{opacity:.35}.bt-log{margin-top:8px;max-height:120px;overflow:auto}
 .mk{cursor:pointer}.mk .ring{transition:.15s}.mk:hover .ring{stroke:var(--acc)}.mk:hover text{fill:var(--acc)}
-/* ===== 양피지 해도 질감 ===== */
-body{background:radial-gradient(ellipse 70% 38% at 50% 0,var(--glow),transparent 70%) fixed,radial-gradient(ellipse at 50% 45%,transparent 52%,var(--vg) 135%) fixed,var(--gr),var(--stain),var(--bg2);background-blend-mode:var(--bm);font-family:"Nanum Myeongjo","Noto Serif KR","Batang","Georgia",serif;transition:background-color .8s,color .8s}
-h1,h2,h3,.vt,nav button,#sky,.gt,button{font-family:"Nanum Myeongjo","Noto Serif KR","Batang","Georgia",serif}
-/* 제목 띠: 양옆에 겹줄이 뻗는다 */
-h2{display:block;text-align:center;margin:14px 0 8px;padding:3px 0;border:0;border-top:3px double var(--line);border-bottom:1px solid var(--line);font-size:13px;font-weight:700;letter-spacing:.3em;color:var(--ink)}
-h2::before{content:none!important}
-.card>h2:first-child,.pan .two>div>h2:first-child,#side h2{display:flex;align-items:center;justify-content:center;gap:12px;margin:0 0 10px!important;padding:0!important;background:none!important;border:0!important;border-radius:0!important}
+/* ===== 청록 해도: 평평한 종이, 가는 잉크 선 ===== */
+body{background:var(--bg);font-family:"Pretendard","Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;transition:background-color .8s,color .8s}
+h1,.vt,#title h1{font-family:"Nanum Myeongjo","Noto Serif KR",Georgia,serif}
+h2{display:block;text-align:left;margin:14px 0 8px;padding:0 0 4px;border:0;border-bottom:1px solid var(--line);font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--acc2)}
+h2::before,h2::after{content:none!important}
+.card>h2:first-child,.pan .two>div>h2:first-child,#side h2{display:block;margin:0 0 10px!important;padding:0 0 5px!important;background:none!important;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important}
 #side h2{margin:14px 0 8px!important}
-.card>h2:first-child::before,.card>h2:first-child::after,.pan .two>div>h2:first-child::before,.pan .two>div>h2:first-child::after,#side h2::before,#side h2::after{content:""!important;flex:1;height:4px;margin:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-size:0}
-h2 .sub{letter-spacing:.1em;font-weight:400}
-h3{letter-spacing:.14em}
-/* 종이 한 장 + 겹테두리 */
-.card,.pan .two>div{background:color-mix(in srgb,var(--card) 62%,transparent);border:1px solid var(--line);outline:1px solid color-mix(in srgb,var(--line) 70%,transparent);outline-offset:-5px;border-radius:0;box-shadow:2px 3px 0 color-mix(in srgb,var(--shadow) 35%,transparent);padding:15px 18px}
+h2 .sub{letter-spacing:.04em;font-weight:400}
+.card,.pan .two>div{background:var(--card);border:1px solid var(--line);outline:0;border-radius:3px;box-shadow:none;padding:14px 16px}
 .modal .card{background:var(--card)}
-.modal{background:rgba(20,10,2,.5)}
-.ov{background:var(--gr),var(--stain),var(--bg2);background-blend-mode:multiply,multiply,normal}
-.seat{background:color-mix(in srgb,var(--sh) 40%,transparent);border:1px dashed var(--line);border-radius:0}
-.tile,.bt-row,.chip,.cd{border-radius:0}
-.tile{background:color-mix(in srgb,var(--card) 50%,transparent)}
-.chip{background:transparent;letter-spacing:.04em;border-color:var(--line)}
+.modal{background:rgba(5,25,30,.5)}
+.ov{background:var(--bg2)}
+.seat{background:var(--sh);border:1px solid var(--line);border-radius:3px}
+.tile,.bt-row,.cd{border-radius:3px}
+.tile{background:var(--card)}
+.chip{background:transparent;border-radius:3px;border-color:var(--line);color:var(--sub)}
 .chip.g{color:var(--acc2);border-color:var(--acc2)}
-.pend{border:0;border-left:0;background:color-mix(in srgb,var(--sh) 35%,transparent);border-top:1px solid var(--acc);border-bottom:1px solid var(--acc);padding:8px 10px}
-/* 버튼: 도장처럼 찍히는 느낌 */
-button,input,select{border-radius:0;background:transparent;border-color:var(--line);color:var(--ink)}
-button{border:1px solid var(--ink);letter-spacing:.04em;box-shadow:2px 2px 0 color-mix(in srgb,var(--line) 55%,transparent);transition:transform .08s,box-shadow .08s,background-color .15s,color .15s}
-button:hover:not(:disabled){background:color-mix(in srgb,var(--acc) 11%,transparent);border-color:var(--acc);color:var(--acc)}
-button:active:not(:disabled){transform:translate(2px,2px);box-shadow:none}
-button.on{background:color-mix(in srgb,var(--acc) 12%,transparent);border-color:var(--acc);color:var(--acc)}
-button.pri{background:var(--acc);border-color:var(--acc);color:var(--on);outline:1px solid color-mix(in srgb,var(--on) 55%,transparent);outline-offset:-4px;box-shadow:2px 2px 0 color-mix(in srgb,var(--shadow) 60%,transparent)}
-button.pri:hover:not(:disabled){background:var(--acc);color:var(--on);filter:brightness(1.12)}
-input,select{border:0;border-bottom:1px solid var(--ink);background:color-mix(in srgb,var(--card) 45%,transparent);padding:4px 6px}
-input:focus,select:focus{outline:0;border-bottom-color:var(--acc);background:color-mix(in srgb,var(--card) 80%,transparent)}
-input::placeholder{color:var(--sub);opacity:.7;font-style:italic}
-a{color:var(--acc);text-decoration:underline dotted}
-/* 게이지: 빗금 친 막대 */
-.bar{height:9px;border:1px solid var(--line);border-radius:0;background:transparent;margin:3px 0 9px}
-.bar i{border-radius:0;background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 4px),var(--acc2)}
-.bar.w i{background:repeating-linear-gradient(-45deg,color-mix(in srgb,var(--ink) 45%,transparent) 0 1px,transparent 1px 4px),var(--warn)}
-.crew-row .xpb{border-radius:0;height:4px}.crew-row .xpb i{border-radius:0;background:var(--acc)}
-/* 옆 기둥, 탭 */
-#side{background:color-mix(in srgb,var(--hd) 40%,transparent);border-top:0;border-right:3px double var(--line);box-shadow:none}
-#side #sn{font-size:19px;letter-spacing:.14em}
-#rt nav{padding:8px 16px 0;gap:3px;border-bottom:1px solid var(--line)}
-#rt nav button{border:1px solid transparent;border-bottom:0;border-radius:0;padding:6px 16px;margin:0;box-shadow:none;letter-spacing:.2em;color:color-mix(in srgb,var(--ink) 78%,transparent)}
-#rt nav button:hover:not(:disabled){background:none;color:var(--acc);border-color:transparent}
-#rt nav button.on{background:color-mix(in srgb,var(--card) 70%,transparent);border-color:var(--line);color:var(--ink);margin-bottom:-1px;box-shadow:none;font-weight:700}
+.pend{border:0;border-left:3px solid var(--acc);background:var(--sh);padding:8px 10px;border-radius:0 3px 3px 0}
+button,input,select{border-radius:3px;background:var(--card);border:1px solid var(--line);color:var(--ink)}
+button{box-shadow:none;transition:background-color .15s,border-color .15s,color .15s}
+button:hover:not(:disabled){background:var(--hd);border-color:var(--acc2);color:var(--ink)}
+button.on{background:var(--hd);border-color:var(--acc2);color:var(--acc2)}
+button.pri{background:var(--acc2);border-color:var(--acc2);color:var(--on);outline:0}
+button.pri:hover:not(:disabled){background:var(--acc2);color:var(--on);filter:brightness(1.12)}
+input,select{padding:5px 8px}
+input:focus,select:focus{outline:2px solid color-mix(in srgb,var(--acc2) 40%,transparent);outline-offset:0;border-color:var(--acc2)}
+input::placeholder{color:var(--sub);opacity:.7}
+a{color:var(--acc2);text-decoration:underline}
+.bar{height:6px;border:0;border-radius:3px;background:var(--hd);margin:3px 0 9px;overflow:hidden}
+.bar i{border-radius:3px;background:var(--acc2)}
+.bar.w i{background:var(--warn)}
+.crew-row .xpb{border-radius:2px;height:3px;background:var(--hd)}.crew-row .xpb i{border-radius:2px;background:var(--acc2)}
+#side{background:var(--bg2);border-top:0;border-right:1px solid var(--line);box-shadow:none}
+#side #sn{font-size:18px;letter-spacing:.04em}
+#rt nav{padding:8px 16px 0;gap:2px;border-bottom:1px solid var(--line)}
+#rt nav button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:7px 16px;margin:0;background:none;color:var(--sub)}
+#rt nav button:hover:not(:disabled){background:none;color:var(--ink)}
+#rt nav button.on{background:none;border-bottom-color:var(--acc);color:var(--ink);font-weight:700}
 #rt nav button::before{content:""!important}
 .pan,.dk{animation:fadein .35s ease both}@keyframes fadein{from{opacity:0}to{opacity:1}}
-/* 해도 */
-#map{max-width:none;background:var(--sea);border:1px solid var(--ink);outline:1px solid var(--line);outline-offset:4px;border-radius:0;box-shadow:3px 4px 0 color-mix(in srgb,var(--shadow) 40%,transparent);margin:4px 5px 6px}
-.town{border-radius:0;border-color:var(--ink)}
+#map{max-width:none;background:var(--sea);border:1px solid var(--ink);outline:0;border-radius:3px;box-shadow:none;margin:0}
+.town{border-radius:3px;border-color:var(--line)}
 /* 눈금자 같은 하늘 띠: 해와 달이 시간 따라 지나간다 */
-#sky{position:relative;height:40px;overflow:hidden;background:color-mix(in srgb,var(--hd) 55%,transparent);display:flex;align-items:center;justify-content:flex-end;padding:0 18px;font-size:12px;letter-spacing:.16em;color:var(--ink);border-bottom:3px double var(--line);transition:background .8s}
+#sky{position:relative;height:40px;overflow:hidden;background:var(--hd);display:flex;align-items:center;justify-content:flex-end;padding:0 18px;font-size:12px;letter-spacing:.1em;color:var(--ink);border-bottom:1px solid var(--line);transition:background .8s}
 #sky::after{content:"";position:absolute;left:0;right:0;bottom:0;height:9px;pointer-events:none;background:repeating-linear-gradient(90deg,var(--sub) 0 1px,transparent 1px 12px) 0 100%/100% 5px no-repeat,repeating-linear-gradient(90deg,var(--ink) 0 1px,transparent 1px 60px) 0 100%/100% 9px no-repeat}
 #sky::before{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:none;animation:none}
 #sky[data-tod="night"]::before{background-image:radial-gradient(1.3px 1.3px at 8% 30%,var(--ink),transparent),radial-gradient(1px 1px at 17% 62%,var(--sub),transparent),radial-gradient(1.4px 1.4px at 29% 36%,var(--ink),transparent),radial-gradient(1px 1px at 41% 58%,var(--sub),transparent),radial-gradient(1.2px 1.2px at 54% 25%,var(--ink),transparent),radial-gradient(1px 1px at 66% 52%,var(--sub),transparent),radial-gradient(1.4px 1.4px at 78% 30%,var(--ink),transparent),radial-gradient(1px 1px at 90% 54%,var(--sub),transparent);animation:tw 5s ease-in-out infinite alternate}
 #sky[data-tod="day"]::before,#sky[data-tod="dusk"]::before,#sky[data-tod="dawn"]::before{background:none}
-#sky #skyt{position:relative;z-index:2;background:color-mix(in srgb,var(--card) 80%,transparent);border:1px solid var(--line);border-radius:0;padding:1px 10px}
+#sky #skyt{position:relative;z-index:2;background:var(--card);border:1px solid var(--line);border-radius:3px;padding:1px 10px}
 #sky .orb{position:absolute;left:var(--sx,50%);top:var(--sy,50%);width:22px;height:22px;transform:translate(-50%,-50%);z-index:1;transition:left 2s linear,top 2s linear;border-radius:50%}
 #sky[data-orb="sun"] .orb{background:radial-gradient(circle,var(--acc) 0 36%,transparent 38%),repeating-conic-gradient(var(--acc) 0 9deg,transparent 9deg 30deg);box-shadow:none;-webkit-mask:radial-gradient(circle,#000 0 70%,transparent 72%);mask:radial-gradient(circle,#000 0 70%,transparent 72%)}
 #sky[data-orb="moon"] .orb{width:18px;height:18px;background:var(--ink);box-shadow:inset -6px -1px 0 0 var(--hd)}
@@ -161,14 +148,14 @@ a{color:var(--acc);text-decoration:underline dotted}
 #chl{max-height:260px;min-height:120px}
 .lg{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .crew-row{display:flex;gap:10px;align-items:center;padding:7px 0;border-bottom:1px dotted var(--line)}.crew-row:last-child{border:0}
-.crew-row .av{flex:none;width:38px;height:38px;border-radius:0;background:transparent;border:2px solid var(--acc);color:var(--acc);display:grid;place-items:center;font-size:20px;font-weight:700;line-height:1;transform:rotate(-4deg);box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--acc) 0%,transparent),inset 0 0 0 3px color-mix(in srgb,var(--card) 90%,transparent),inset 0 0 0 4px var(--acc)}
+.crew-row .av{flex:none;width:34px;height:34px;border-radius:50%;background:var(--acc2);color:var(--on);display:grid;place-items:center;font-size:15px;font-weight:700;line-height:1}
 .crew-row .ci{flex:1;min-width:0}.crew-row .cn{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.crew-row .dot{width:8px;height:8px;border-radius:0;transform:rotate(45deg);background:transparent;border:1px solid var(--sub);display:inline-block}.crew-row .dot.on{background:var(--acc2);border-color:var(--acc2);box-shadow:none}
+.crew-row .dot{width:8px;height:8px;border-radius:50%;background:var(--line);display:inline-block}.crew-row .dot.on{background:#3fb58a}
 /* 제목 화면과 가입 화면 */
 .scr{position:relative}
-.scr::before{content:"";position:fixed;inset:12px;border:1px solid var(--ink);outline:1px solid var(--line);outline-offset:5px;pointer-events:none;z-index:0}
+.scr::before{content:"";position:fixed;inset:14px;border:1px solid var(--line);pointer-events:none;z-index:0}
 .scr>*{position:relative;z-index:1}
-#title h1{font-size:40px;letter-spacing:.5em;margin:4px 0 6px .5em;font-weight:700}
+#title h1{font-size:38px;letter-spacing:.45em;margin:4px 0 6px .5em;font-weight:700}
 .ttl-la{font-style:italic;color:var(--sub);letter-spacing:.3em;font-size:12px}
 .rose{width:min(280px,64vw);margin:0 auto 10px;display:block;border:0;cursor:default;color:var(--ink);overflow:visible}
 .waves{width:min(360px,80vw);height:14px;margin:12px auto;border:0;cursor:default;color:var(--sub)}
