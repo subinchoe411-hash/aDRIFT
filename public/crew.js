@@ -45,7 +45,7 @@ O.advBonus=i=>{const a=S.pend&&S.pend.adv&&S.pend.adv[i];return a?Math.min(.1,.0
 
 // 선원이 볼 수 있게 올리는 배 상태
 O.snapExtra=()=>{
- const x={hr:Math.round(S.t%1440/6)/10,wind:Math.round(S.wind),ws:Math.round(S.ws*10)/10,vr:Math.round(vis()*10)/10};
+ const x={hr:Math.round(HRF()*10)/10,wind:Math.round(S.wind),ws:Math.round(S.ws*10)/10,vr:Math.round(vis()*10)/10};
  if(S.tx!==null){x.tx=Math.round(S.tx*10)/10;x.ty=Math.round(S.ty*10)/10;try{x.dst=Math.round(remD()*10)/10}catch(e){}}
  if(S.act)x.act=S.act.n;
  if(S.bt&&!S.bt.done){const b=S.bt;x.bt={t:b.t,rd:b.rd,tg:b.tg,en:b.en.map(e=>({n:e.n,hp:Math.max(0,Math.round(e.hp)),mhp:e.mhp})),al:b.al.map(a=>({n:a.n,hp:Math.max(0,Math.round(hpv(a))),mhp:Math.round(mhv(a)),role:a.role||""})),log:b.log.slice(-3).map(plain)}}
@@ -127,7 +127,7 @@ let nextAmb=0,lastHr=-1,lastStorm=0,lastDk=-1;
 const PHASE={5:"dawn",12:"noon",18:"dusk",22:"night"};
 function watch(){
  if(!gameOn()||O.crewMode||!aboard().length){return}
- const hr=Math.floor(S.t%1440/60);
+ const hr=Math.floor(HRF());
  if(hr!==lastHr){if(lastHr>=0&&PHASE[hr]&&S.dk<0&&S.isl===null&&!S.inC)crewLine(PHASE[hr],{gap:60});lastHr=hr}
  const st=(S.ct&&S.ct.storm)||0;if(st>lastStorm){if(lastStorm>0||st>0)crewLine("storm",{gap:10});lastStorm=st}
  if(S.dk!==lastDk){if(S.dk>=0&&lastDk<0&&I[S.dk])crewLine("dock",{isl:I[S.dk].n,gap:5});lastDk=S.dk}
@@ -278,7 +278,7 @@ const D8=["북","북동","동","남동","남","남서","서","북서"];
 function side(){
  const m=O.data.crew.memberOf,sh=m.ship,sn=snapOf(),mm=me();
  $("csn").textContent=sh?sh.ship:"배";$("cscap").textContent=`선장 ${m.captain}`+(sh&&sh.online?" · 접속 중":"");
- $("csclk").textContent=sn.d?`${sn.hr!=null?TODI[todOf(sn.hr)]+" ":""}항해 ${sn.d}일째`:"";if(sn.hr!=null)applyTod(sn.hr);
+ $("csclk").textContent=sn.d?`${TODI[todOf(HRF())]+" "}항해 ${sn.d}일째`:"";applyTod();
  const state=!sh?"아직 출항 전":!sh.online?`선장이 자리를 비웠다 (${Math.max(0,Math.round((O.srvNow()-sh.at)/60000))}분 전)`:sn.dv?`${sn.dv.n} 잠수 중`:sh.loc==="port"?`${sn.in||"부두"}에 정박`:sn.sail?"항해 중":"바다에서 닻을 내림";
  $("cswh").textContent=state;
  const set=(k,v,mx,w)=>{$("c"+k+"v").textContent=Math.round(v)+" / "+mx;$("c"+k+"b").firstElementChild.style.width=Math.max(0,Math.min(100,v/Math.max(1,mx)*100))+"%";$("c"+k+"b").className="bar"+(v/Math.max(1,mx)<w?" w":"")};
