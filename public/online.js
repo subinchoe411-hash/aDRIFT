@@ -67,6 +67,22 @@ function schedule(ms){clearTimeout(timer);if(!O.on)return;
   if(ms!==0&&Date.now()-lastInput>IDLE_MS){idle=true;let b=$("olidle");if(!b){b=document.createElement("div");b.id="olidle";b.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;background:var(--bg);border:1px solid var(--line);padding:6px 14px;font-size:12px";b.textContent="자리 비움 — 화면을 누르면 온라인 연결을 다시 시작합니다.";document.body.appendChild(b)}b.hidden=false;return}
   timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:(O.crewMode?(O.hot&&O.hot()?2500:4500):gameOn()?(O.hot&&O.hot()?2500:5000):20000)):ms)}
 O.syncNow=()=>schedule(0);
+/* ===== 배 창고 동기화 =====
+   서버가 정본이다. 선장 화면은 '마지막으로 받은 창고(stoB)'와 지금 S.sto 의 차이만 올린다.
+   선원이 그사이 넣고 뺀 것은 서버 값 위에 선장의 변화를 얹어 합친다. 응답이 끊겨도 같은 seq 로 다시 보내 두 번 반영되지 않는다. */
+let stoB=null,stoInf=null,stoForce=false,stoSeq=Date.now();
+const sdiff=(a,b)=>{const d={};for(const k of new Set([...Object.keys(a),...Object.keys(b)])){const v=(a[k]||0)-(b[k]||0);if(v)d[k]=v}return d};
+const sapply=(o,d)=>{const r={...o};for(const k in d){const n=(r[k]||0)+d[k];if(n>0)r[k]=n;else delete r[k]}return r};
+O.stoReset=force=>{stoB=null;stoInf=null;stoForce=!!force};
+O.stoOut=()=>{if(!S||!S.sto)return undefined;const cap=capS();
+  if(!stoB)return{init:{...S.sto},reset:stoForce||undefined,seq:++stoSeq,cap};
+  if(!stoInf){const d=sdiff(S.sto,stoB);if(Object.keys(d).length)stoInf={seq:++stoSeq,d}}
+  return stoInf?{d:stoInf.d,seq:stoInf.seq,cap}:{cap}};
+O.stoIn=(r,sent)=>{const s=r.sto;if(!s||!S||!S.sto)return;const before=JSON.stringify(S.sto);
+  if(!stoB){S.sto=sapply({},s.items);stoForce=false}
+  else{const ap=!sent.d||s.seq>=sent.seq,extra=sdiff(S.sto,ap?sapply(stoB,sent.d||{}):stoB);S.sto=sapply(s.items,extra);if(stoInf){if(ap)stoInf=null;else{stoSeq=Math.max(stoSeq,s.seq);stoInf.seq=++stoSeq}}}
+  stoB={...s.items};
+  if(JSON.stringify(S.sto)!==before){renderAll();saveGame()}};
 function myState(){
   const loc=S.inC?"city":(S.isl!==null||S.dk>=0)?"port":"sea",isl=S.isl!==null?S.isl:S.dk;
   return {name:C.name,ship:SH[S.lv].n,lv:S.lv,x:S.x,y:S.y,hd:S.hd,loc,isl:loc==="port"?isl:-1,
@@ -76,8 +92,10 @@ async function sync(){
   if(!O.on||!tok||busy)return;busy=true;let ok=false;
   try{
     const active=gameOn();
-    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined});
+    const so=active?O.stoOut():undefined;
+    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined,sto:so});
     O.data=r;O.off=r.now-Date.now();ok=true;
+    if(active&&so)O.stoIn(r,so);
     for(const ch in r.chat){const a=r.chat[ch];if(a.length)since[ch]=a[a.length-1].id;chatAdd(ch,a)}
     if(active)await takeDeliveries(r.deliveries);else if(O.crewMode&&O.crewDeliveries)await O.crewDeliveries(r.deliveries);
     noticeNearby(r);renderDock();O.renderCrew&&O.renderCrew();O.renderCrewInfo&&O.renderCrewInfo();if(!active&&!O.crewMode&&!$("title").hidden)decorateTitle()

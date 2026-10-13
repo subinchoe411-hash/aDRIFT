@@ -392,9 +392,15 @@ function cabin(){
 
 /* ---- 소지품 (내 보관함) ---- */
 function inv(){
- const items=Object.keys(cs.bag).sort();
- $("v-inv").innerHTML=VHD(IC.inv,"소지품","선원의 사물함 — 배의 창고는 선장 전용이다")+`<div class="sub sm">보관함 ${bagN()} / ${BAGMAX}</div>`+
- (items.length?items.map(k=>`<div class="row"><span>${esc(k)} ×${cs.bag[k]} ${IT[k]?`<span class="sub sm">${esc(IT[k])}</span>`:""}</span><span>${EDI(k)?`<a onclick="Online.ceat('${esc(k)}')">먹기</a><a onclick="Online.cserve('${esc(k)}')">선장에게 올리기</a>`:""}<a onclick="Online.cdrop('${esc(k)}')">버리기</a></span></div>`).join(""):"<div class='sub'>비어 있다. 낚시를 하면 내 몫이 생긴다.</div>")}
+ const items=Object.keys(cs.bag).sort(),m=O.data&&O.data.crew.memberOf,st=m&&m.sto?m.sto:{items:{},cap:0},sk=Object.keys(st.items).sort(),sn=Object.values(st.items).reduce((a,b)=>a+b,0);
+ const mv=(k,dir,n,lab)=>`<a onclick="Online.csto('${esc(k)}','${dir}',${n})">${lab}</a>`;
+ $("v-inv").innerHTML=VHD(IC.inv,"소지품","내 사물함과, 선장과 함께 쓰는 배 창고")+`<div class="two"><div><h2>내 사물함 ${bagN()} / ${BAGMAX}</h2>`+
+ (items.length?items.map(k=>`<div class="row"><span>${esc(k)} ×${cs.bag[k]} ${IT[k]?`<span class="sub sm">${esc(IT[k])}</span>`:""}</span><span>${EDI(k)?`<a onclick="Online.ceat('${esc(k)}')">먹기</a><a onclick="Online.cserve('${esc(k)}')">선장에게 올리기</a>`:""}${mv(k,"put",1,"창고에 1")}${cs.bag[k]>1?mv(k,"put",cs.bag[k],"전부"):""}<a onclick="Online.cdrop('${esc(k)}')">버리기</a></span></div>`).join(""):"<div class='sub'>비어 있다. 낚시를 하면 내 몫이 생긴다.</div>")+
+ `</div><div><h2>배 창고 ${sn} / ${st.cap} <span class="sub">· 선장과 공유</span></h2>`+
+ (sk.length?sk.map(k=>`<div class="row"><span>${esc(k)} ×${st.items[k]}</span><span>${mv(k,"take",1,"1개 꺼내기")}${st.items[k]>1?mv(k,"take",st.items[k],"전부"):""}</span></div>`).join(""):"<div class='sub'>비어 있다. 선장이 접속해 있으면 선장의 창고가 이곳에 보인다.</div>")+`</div></div>`}
+O.csto=(k,dir,n)=>act(async()=>{n=Math.floor(+n);if(!(n>0))return;
+ if(dir==="put"){if((cs.bag[k]||0)<n){note("사물함에 그만큼 없다.");return}await O.api("/ship/sto",{k,n:Math.min(n,99),dir});bagTake(k,Math.min(n,99));note(`${k} ${Math.min(n,99)}개를 배 창고에 넣었다.`)}
+ else{if(!knownItem(k)){note("알 수 없는 물건이다.");return}const room=BAGMAX-bagN(),c=Math.min(n,99,room);if(c<=0){note("사물함이 가득 찼다.");return}await O.api("/ship/sto",{k,n:c,dir});bagAdd(k,c);note(`배 창고에서 ${k} ${c}개를 꺼냈다.`)}});
 O.cdrop=k=>{if(bagTake(k,1))render()};
 
 /* 선원 채팅 입력: 선원 시점에서는 배 채널로 말한다 (online.js 의 채팅 처리를 그대로 쓴다) */

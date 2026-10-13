@@ -26,7 +26,7 @@ export const SCHEMA = [
 ];
 
 // 이미 배포된 DB 를 새 버전으로 올리는 변경들. 각 문장은 개별로 실행하고 '이미 있음' 오류는 무시한다.
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const MIGRATIONS = [
   // v2: 선원 개편 (직책, 컨디션, 개인 보관함)
   `ALTER TABLE crew_profile ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
@@ -38,4 +38,6 @@ export const MIGRATIONS = [
   `ALTER TABLE crew_profile ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`,
   // v4: 선원 캐릭터 이름 (아이디 대신 항해일지·채팅에 보이는 이름)
   `ALTER TABLE crew_profile ADD COLUMN cname TEXT NOT NULL DEFAULT ''`,
+  // v5: 선장과 선원이 함께 쓰는 배 창고 (서버가 정본을 갖는다)
+  `CREATE TABLE IF NOT EXISTS ship_sto(captain_id INTEGER PRIMARY KEY, items TEXT NOT NULL DEFAULT '{}', cap INTEGER NOT NULL DEFAULT 20, seq INTEGER NOT NULL DEFAULT 0, ver INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0)`,
 ];

@@ -250,3 +250,39 @@ test("전투·잠수 지원, 장면 건의, 공동 보상, 배식, 선원 보관
   assert.equal((await call("/api/crewstate", { data: '{"bag":{"멸치":2}}' }, mate.tok, "PUT")).status, 200);
   assert.equal((await call("/api/crewstate", undefined, mate.tok)).data, '{"bag":{"멸치":2}}');
 });
+
+test("배 창고: 선장 변화 반영, 선원 넣기·꺼내기, 중복 전송 무시", async () => {
+  const cap = await join_("stoc"), mate = await join_("stom");
+  await call("/api/crew/invite", { username: "stom" }, cap.tok);
+  const inv = (await sync(mate.tok, me({}))).crew.invitesIn[0];
+  await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
+  // 처음 올리면 선장 화면의 창고가 그대로 서버 창고가 된다
+  let r = await sync(cap.tok, me({ name: "선장" }));
+  assert.equal(r.sto, undefined);
+  r = await call("/api/sync", { me: me({}), sto: { init: { 소금: 3, 쌀: 2 }, seq: 1000, cap: 20 } }, cap.tok);
+  assert.deepEqual(r.sto.items, { 소금: 3, 쌀: 2 });
+  // 선원은 같은 창고를 본다
+  const view = (await sync(mate.tok, me({}))).crew.memberOf.sto;
+  assert.deepEqual(view.items, { 소금: 3, 쌀: 2 });
+  // 선원이 꺼내고 넣는다
+  assert.equal((await call("/api/ship/sto", { k: "소금", n: 2, dir: "take" }, mate.tok)).items["소금"], 1);
+  assert.equal((await call("/api/ship/sto", { k: "소금", n: 5, dir: "take" }, mate.tok)).status, 400, "없는 만큼은 못 꺼낸다");
+  assert.equal((await call("/api/ship/sto", { k: "멸치", n: 4, dir: "put" }, mate.tok)).items["멸치"], 4);
+  assert.equal((await call("/api/ship/sto", { k: "멸치", n: 99, dir: "put" }, mate.tok)).status, 400, "정원 초과");
+  assert.equal((await call("/api/ship/sto", { k: "<b>", n: 1, dir: "put" }, mate.tok)).status, 400);
+  // 선장 변화(차이)는 선원의 변화 위에 더해지고, 같은 seq 를 다시 보내도 한 번만 적용된다
+  const d = { sto: { d: { 쌀: -1, 소금: 2 }, seq: 1001, cap: 20 } };
+  r = await call("/api/sync", { me: me({}), ...d }, cap.tok);
+  assert.deepEqual(r.sto.items, { 소금: 3, 쌀: 1, 멸치: 4 });
+  r = await call("/api/sync", { me: me({}), ...d }, cap.tok);
+  assert.deepEqual(r.sto.items, { 소금: 3, 쌀: 1, 멸치: 4 });
+  // 탑승 중이 아니면 쓸 수 없다
+  const out = await join_("stoo");
+  assert.equal((await call("/api/ship/sto", { k: "소금", n: 1, dir: "take" }, out.tok)).status, 400);
+  // 동시에 꺼내도 총량보다 많이 나가지 않는다
+  const rs = await Promise.all(Array.from({ length: 6 }, () => call("/api/ship/sto", { k: "멸치", n: 1, dir: "take" }, mate.tok)));
+  const okN = rs.filter((x) => x.status === 200).length;
+  assert.ok(okN <= 4, "ok=" + okN);
+  const fin = (await sync(mate.tok, me({}))).crew.memberOf.sto.items["멸치"] || 0;
+  assert.equal(fin, 4 - okN);
+});

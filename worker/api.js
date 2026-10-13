@@ -327,6 +327,51 @@ route("PUT", "/api/save", async ({ env, user, body }) => {
 }, { maxBody: 1_500_000 });
 
 /* 동기화: 내 위치를 알리고, 주변·채팅·우편·거래·선원 소식을 한 번에 받는다 (D1 왕복 2번) */
+
+/* ===== 배 창고: 선장과 선원이 함께 쓴다 (서버가 정본) =====
+   선장은 자기 화면에서 바뀐 만큼(차이)만 올리고, 선원은 넣기/가져오기를 서버에 직접 요청한다.
+   같은 줄을 동시에 고치지 않도록 ver 비교 후 저장(실패하면 다시 읽어 재시도). */
+const itemKey = (k) => typeof k === "string" && k.length >= 1 && k.length <= 24 && !/[<>"'`\\]/.test(k);
+const cleanItems = (o) => { const r = {}; if (o && typeof o === "object") for (const k of Object.keys(o).slice(0, 80)) { const n = Math.floor(+o[k]); if (itemKey(k) && n > 0 && n < 100000) r[k] = n; } return r; };
+const itemTotal = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+async function stoGet(env, cid) {
+  const r = await first(env, "SELECT items,cap,seq,ver FROM ship_sto WHERE captain_id=?", cid);
+  return r ? { items: cleanItems(json(r.items)), cap: r.cap, seq: r.seq, ver: r.ver, has: true } : { items: {}, cap: 20, seq: 0, ver: 0, has: false };
+}
+// fn(cur) 가 새 상태를 돌려주거나(저장), null 을 돌려주면(저장 안 함) 그 상태 그대로 돌려준다
+async function stoUpdate(env, cid, fn) {
+  for (let i = 0; i < 4; i++) {
+    const cur = await stoGet(env, cid), nx = fn(cur);
+    if (!nx) return cur;
+    const items = cleanItems(nx.items), t = now();
+    const res = cur.has
+      ? await run(env, "UPDATE ship_sto SET items=?,cap=?,seq=?,ver=ver+1,updated=? WHERE captain_id=? AND ver=?", JSON.stringify(items), nx.cap, nx.seq, t, cid, cur.ver)
+      : await run(env, "INSERT OR IGNORE INTO ship_sto(captain_id,items,cap,seq,ver,updated) VALUES(?,?,?,?,1,?)", cid, JSON.stringify(items), nx.cap, nx.seq, t);
+    if (res && res.meta && res.meta.changes > 0) return { ...nx, items, ver: cur.ver + 1, has: true };
+  }
+  throw bad("창고가 붐빕니다. 잠시 뒤 다시 해 주세요.");
+}
+// 선장 화면이 보낸 변화를 반영하고 현재 창고를 돌려준다
+async function stoSync(env, cid, s) {
+  const cap = Math.floor(num(s.cap, 0, 500, 20));
+  return stoUpdate(env, cid, (cur) => {
+    if (!cur.has || (s.reset === true && s.init)) return { items: cleanItems(s.init || s.d), cap, seq: Math.floor(num(s.seq, 0, 1e15, 0)) };
+    const items = { ...cur.items };
+    let seq = cur.seq, changed = cap !== cur.cap;
+    const sq = Math.floor(num(s.seq, 0, 1e15, 0));
+    if (s.d && typeof s.d === "object" && sq > cur.seq) {
+      for (const k of Object.keys(s.d).slice(0, 80)) {
+        const d = Math.trunc(+s.d[k]);
+        if (!itemKey(k) || !Number.isFinite(d) || !d || Math.abs(d) > 5000) continue;
+        const n = Math.max(0, (items[k] || 0) + d);
+        if (n) items[k] = n; else delete items[k];
+      }
+      seq = sq; changed = true;
+    }
+    return changed ? { items, cap, seq } : null;
+  });
+}
+
 route("POST", "/api/sync", async ({ env, user, body }) => {
   const t = now(), m = body.me, R = encR(env);
   const stm = [];
@@ -356,6 +401,8 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
   );
+  let sto = null;
+  if (body.sto && typeof body.sto === "object") sto = await stoSync(env, user.id, body.sto);
   const r1 = (await env.DB.batch(stm)).slice(o).map((x) => x.results || []);
   const [mineR, crewR, candR, rosterR, delivR, tinR, toutR, membersR, invInR, invOutR, profR] = r1;
   const mine = mineR[0], crewRow = crewR[0], p = profR[0];
@@ -399,6 +446,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
       ship: cp ? { name: cp.name, ship: cp.ship, lv: cp.lv, x: cp.x, y: cp.y, hd: cp.hd, loc: cp.loc, isl: cp.isl, online: t - cp.updated < FRESH * 2, snap: json(cp.snap), at: cp.updated } : null,
     };
   }
+  if (crewRow) { const cs = await stoGet(env, crewRow.captain_id); crew.memberOf.sto = { items: cs.items, cap: cs.cap }; }
   if (p || crewRow) {
     const pp = p || { purse: 0, xp: 0, tasks: 0, day: "", day_earn: 0, role: "", cond: 100, cond_at: 0 };
     crew.me = { purse: pp.purse, xp: pp.xp, tasks: pp.tasks, rank: rankOf(pp.xp), role: pp.role || "", cname: pp.cname || "", cond: condNow(pp, t), cd, dayLeft: DAILY_CAP - (pp.day === dayKey() ? pp.day_earn : 0) };
@@ -406,6 +454,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
 
   return {
     now: t, nearby, chat, crew, radius: R, roster: rosterR,
+    sto: sto ? { items: sto.items, cap: sto.cap, seq: sto.seq } : undefined,
     deliveries: delivR.map((d) => ({ ...d, payload: json(d.payload) })),
     trades: {
       incoming: tinR.map((r) => ({ id: r.id, from: r.from_id, name: r.fromName, give: json(r.give), want: json(r.want), expires: r.expires })),
@@ -682,6 +731,29 @@ route("POST", "/api/crew/eat", async ({ env, user, body }) => {
   return { ok: true, cond };
 });
 // 선원 개인 보관함·일지 (선원 주방/소지품 탭)
+// 선원이 배 창고에 넣거나(put) 꺼낸다(take). 꺼낼 때는 서버가 먼저 줄이므로 같은 물건을 둘이 가져갈 수 없다.
+route("POST", "/api/ship/sto", async ({ env, user, body }) => {
+  await limit(env, "sto:" + user.id, 40, 60_000);
+  const c = await first(env, "SELECT captain_id FROM crew WHERE member_id=?", user.id);
+  if (!c) throw bad("탑승 중인 배가 없습니다.");
+  const k = body.k, n = Math.floor(num(body.n, 1, 99, 0)), dir = body.dir;
+  if (!itemKey(k) || !n || !["put", "take"].includes(dir)) throw bad("잘못된 요청입니다.");
+  let fail = "";
+  const cur = await stoUpdate(env, c.captain_id, (s) => {
+    fail = "";
+    const items = { ...s.items };
+    if (dir === "take") {
+      if ((items[k] || 0) < n) { fail = "창고에 그만큼 없습니다."; return null; }
+      items[k] -= n; if (!items[k]) delete items[k];
+    } else {
+      if (itemTotal(items) + n > Math.max(s.cap, 0)) { fail = "창고가 가득 찼습니다."; return null; }
+      items[k] = (items[k] || 0) + n;
+    }
+    return { items, cap: s.cap, seq: s.seq };
+  });
+  if (fail) throw bad(fail);
+  return { ok: true, items: cur.items, cap: cur.cap };
+});
 route("GET", "/api/crewstate", async ({ env, user }) => {
   const r = await first(env, "SELECT data,updated FROM crew_state WHERE user_id=?", user.id);
   return r ? { data: r.data } : { data: null };
