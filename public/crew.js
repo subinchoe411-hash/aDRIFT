@@ -7,24 +7,24 @@
 const O=window.Online;if(!O)return;
 const RANKS=["견습 선원","갑판원","숙련 선원","갑판장"],RXP=[0,20,60,150];
 const ROLES=[
- ["낚시꾼","🎣","낚시 수확↑ · 전투 때 포격 지원이 강해짐"],
- ["요리사","🍲","식사 효과↑ · 전투 때 응급처치가 강해짐"],
- ["망꾼","🔭","망보기에서 더 많이 발견 · 교란 지원이 오래감"],
- ["정비공","🔨","수리량↑ · 방패 태세 지원이 2턴 지속"],
- ["항해사","🧭","항로 점검으로 배가 크게 빨라짐"],
- ["상인","💰","물물교환 수익↑"],
- ["잠수부","🤿","잠수 수색↑ · 공기 보급·구조 줄 지원이 강해짐"]];
+ ["낚시꾼","釣","낚시 수확↑ · 전투 때 포격 지원이 강해짐"],
+ ["요리사","炊","식사 효과↑ · 전투 때 응급처치가 강해짐"],
+ ["망꾼","望","망보기에서 더 많이 발견 · 교란 지원이 오래감"],
+ ["정비공","匠","수리량↑ · 방패 태세 지원이 2턴 지속"],
+ ["항해사","航","항로 점검으로 배가 크게 빨라짐"],
+ ["상인","商","물물교환 수익↑"],
+ ["잠수부","潛","잠수 수색↑ · 공기 보급·구조 줄 지원이 강해짐"]];
 const ROLE_TXT=Object.fromEntries(ROLES.map(r=>[r[0],r]));
 const DUTY=[
- ["fish","🎣","낚시","낚시꾼","생선을 선장에게 올린다 (한 마리는 내 몫)"],
- ["cook","🍲","식사 준비","요리사","선장의 허기를 달랜다"],
- ["lookout","🔭","망보기","망꾼","새 섬이나 보물 단서를 찾는다"],
- ["repair","🔨","선체 수리","정비공","선체를 고친다"],
- ["navigate","🧭","항로 점검","항해사","배가 한동안 빨라진다"],
- ["haggle","💰","물물교환","상인","선장에게 용돈을 벌어 준다"],
- ["dive","🤿","잠수 수색","잠수부","바닥을 훑어 조개·해초를 건진다"]];
-const BSUP=[["fire","💥","포격 지원","적 하나를 크게 때린다"],["mend","🩹","응급처치","가장 다친 사람을 치료한다"],["guard","🛡","방패 태세","선장 앞을 막아 피해를 줄인다"],["distract","📣","교란","적이 한 턴 움직이지 못한다"]];
-const DSUP=[["air","🫧","공기 보급","선장의 산소를 채운다"],["rescue","🪢","구조 줄","선장의 체력을 회복시킨다"]];
+ ["fish","釣","낚시","낚시꾼","생선을 선장에게 올린다 (한 마리는 내 몫)"],
+ ["cook","炊","식사 준비","요리사","선장의 허기를 달랜다"],
+ ["lookout","望","망보기","망꾼","새 섬이나 보물 단서를 찾는다"],
+ ["repair","匠","선체 수리","정비공","선체를 고친다"],
+ ["navigate","航","항로 점검","항해사","배가 한동안 빨라진다"],
+ ["haggle","商","물물교환","상인","선장에게 용돈을 벌어 준다"],
+ ["dive","潛","잠수 수색","잠수부","바닥을 훑어 조개·해초를 건진다"]];
+const BSUP=[["fire","砲","포격 지원","적 하나를 크게 때린다"],["mend","醫","응급처치","가장 다친 사람을 치료한다"],["guard","盾","방패 태세","선장 앞을 막아 피해를 줄인다"],["distract","惑","교란","적이 한 턴 움직이지 못한다"]];
+const DSUP=[["air","氣","공기 보급","선장의 산소를 채운다"],["rescue","繩","구조 줄","선장의 체력을 회복시킨다"]];
 const plain=t=>O.plain(t);
 // 받침에 따라 이/가, 은/는, 을/를, 과/와 를 맞춘다 (한글이 아니면 받침 없음으로 본다)
 const batchim=w=>{const ch=String(w).trim().slice(-1),c=ch.charCodeAt(0);if(/[0-9]/.test(ch))return "013678".includes(ch);return c>=0xac00&&c<=0xd7a3&&(c-0xac00)%28!==0};
@@ -102,7 +102,7 @@ function crewText(kind,o){
 function crewLine(kind,o){
  if(!gameOn()||!aboard().length)return;
  o=o||{};const gap=o.gap==null?6:o.gap;if(S.t-(lastAt[kind]||-999)<gap)return;
- const t=crewText(kind,o);if(!t)return;lastAt[kind]=S.t;say("⚓ "+t)}
+ const t=crewText(kind,o);if(!t)return;lastAt[kind]=S.t;say("※ "+t)}
 O.crewLine=crewLine;
 
 /* ---- 게임 함수에 선원 이야기를 얹는다 ---- */
@@ -138,7 +138,7 @@ const rankN=r=>Math.max(0,RANKS.indexOf(r));
 function mkAlly(m){const r=rankN(m.rank);return{n:m.name,role:"선원"+(m.role?"·"+m.role:""),hp:40+r*12,mhp:40+r*12,atk:7+r*2,def:1+Math.floor(r/2),crew:m.id,st:{},q:[],acted:0}}
 function joinBattle(){
  const b=S.bt,cr=aboard().slice(0,4);if(!cr.length)return;let i0=R(CL.btStart.length);
- cr.forEach(m=>{b.al.push(mkAlly(m));bl(`선원 ${m.name}${jo(m.name,"이(가)")} 갑판으로 뛰어나왔다!`);say("⚓ "+fillTpl(CL.btStart[(i0++)%CL.btStart.length],{A:m.name}))});
+ cr.forEach(m=>{b.al.push(mkAlly(m));bl(`선원 ${m.name}${jo(m.name,"이(가)")} 갑판으로 뛰어나왔다!`);say("※ "+fillTpl(CL.btStart[(i0++)%CL.btStart.length],{A:m.name}))});
  renderAll()}
 function crewRound(){
  const b=S.bt;if(!b||b.done)return;
@@ -157,10 +157,10 @@ function afterBattle(b,kind){
  const al=b.al.slice(1);if(!al.length)return;
  const acted=al.filter(a=>a.acted>0&&a.crew);
  if(kind==="win"){
-  const t=crewText("btWin");if(t)say("⚓ "+t);
-  if(acted.length){const extra=acted.length*12+(al.every(a=>hpv(a)>0)?8:0);S.gold+=extra;say(`⚓ 함께 싸운 보람이 있다. 선원들이 전리품을 더 챙겨 왔다. (골드 +${extra})`);report("battle",acted.map(a=>a.crew));saveGame();renderAll()}}
- else if(kind==="lose"){const t=crewText("btLose");if(t)say("⚓ "+t)}
- else if(kind==="flee"){const t=crewText("btFlee");if(t)say("⚓ "+t)}}
+  const t=crewText("btWin");if(t)say("※ "+t);
+  if(acted.length){const extra=acted.length*12+(al.every(a=>hpv(a)>0)?8:0);S.gold+=extra;say(`※ 함께 싸운 보람이 있다. 선원들이 전리품을 더 챙겨 왔다. (골드 +${extra})`);report("battle",acted.map(a=>a.crew));saveGame();renderAll()}}
+ else if(kind==="lose"){const t=crewText("btLose");if(t)say("※ "+t)}
+ else if(kind==="flee"){const t=crewText("btFlee");if(t)say("※ "+t)}}
 async function report(kind,ids){
  try{ids=ids||aboard().map(m=>m.id);if(!ids.length)return;await O.api("/crew/coop",{kind,ids})}catch(e){}}
 
@@ -173,26 +173,44 @@ O.applyExtra=d=>{
   const parts=[];let r="";
   if(p.items)for(const k in p.items){if(knownItem(k)){const n=Math.min(9,Math.floor(+p.items[k])||0);if(n>0){add(k,n);parts.push(`${esc(k)} ${n}`)}}}
   if(p.fx&&String(p.fx).split(";").every(x=>FX1.test(x))){r=fx(p.fx);if(S.hull>hm())S.hull=hm()}
-  say(`⚓ ${esc(p.text||"선원이 일을 마쳤다.")} ${parts.join(", ")} ${r}`.trim());
+  say(`※ ${esc(p.text||"선원이 일을 마쳤다.")} ${parts.join(", ")} ${r}`.trim());
  }else if(d.kind==="crew_support"){
   const by=esc(p.by),k=p.kind,pw=Math.max(0,Math.min(60,Math.floor(+p.power)||0));
   if(k==="fire"||k==="mend"||k==="guard"||k==="distract"){
-   if(!S.bt||S.bt.done){say(`⚓ 전투가 끝나 ${by}의 ${SUPNAME[k]}${jo(SUPNAME[k],"이(가)")} 닿지 못했다.`);return}
+   if(!S.bt||S.bt.done){say(`※ 전투가 끝나 ${by}의 ${SUPNAME[k]}${jo(SUPNAME[k],"이(가)")} 닿지 못했다.`);return}
    let a=S.bt.al.slice(1).find(x=>x.n===p.by);if(!a){a=mkAlly({name:p.by,role:p.role,rank:RANKS[0]});S.bt.al.push(a)}
    if(a.q.length<2)a.q.push({kind:k,power:pw});
    const msg={fire:"포를 끌어 겨눈다",mend:"붕대와 약초를 들고 달려온다",guard:"방패를 들고 선장 곁으로 다가선다",distract:"적의 시선을 끌 준비를 한다"}[k];
-   say(`⚓ <b>${by}</b>${jo(p.by,"이(가)")} ${msg}! (${SUPNAME[k]})`);bl(`${p.by}${jo(p.by,"이(가)")} ${SUPNAME[k]}${jo(SUPNAME[k],"을(를)")} 준비한다.`);renderAll();
+   say(`※ <b>${by}</b>${jo(p.by,"이(가)")} ${msg}! (${SUPNAME[k]})`);bl(`${p.by}${jo(p.by,"이(가)")} ${SUPNAME[k]}${jo(SUPNAME[k],"을(를)")} 준비한다.`);renderAll();
   }else if(k==="air"){
-   if(!S.inC){say(`⚓ 잠수가 끝나 ${by}의 공기 보급이 닿지 못했다.`);return}
-   S.air=Math.min(S.airMax,S.air+pw);say(`⚓ 수면의 <b>${by}</b>${jo(p.by,"이(가)")} 공기 주머니를 줄에 매달아 내려보냈다. (산소 +${pw})`);renderAll();
+   if(!S.inC){say(`※ 잠수가 끝나 ${by}의 공기 보급이 닿지 못했다.`);return}
+   S.air=Math.min(S.airMax,S.air+pw);say(`※ 수면의 <b>${by}</b>${jo(p.by,"이(가)")} 공기 주머니를 줄에 매달아 내려보냈다. (산소 +${pw})`);renderAll();
   }else if(k==="rescue"){
-   if(!S.inC){say(`⚓ 잠수가 끝나 ${by}의 구조 줄이 닿지 못했다.`);return}
-   S.hp=Math.min(hpm(),S.hp+pw);say(`⚓ <b>${by}</b>${jo(p.by,"이(가)")} 줄을 힘껏 당겨 선장을 안전한 곳으로 끌어당겼다. (체력 +${pw})`);renderAll();
+   if(!S.inC){say(`※ 잠수가 끝나 ${by}의 구조 줄이 닿지 못했다.`);return}
+   S.hp=Math.min(hpm(),S.hp+pw);say(`※ <b>${by}</b>${jo(p.by,"이(가)")} 줄을 힘껏 당겨 선장을 안전한 곳으로 끌어당겼다. (체력 +${pw})`);renderAll();
   }
  }else if(d.kind==="crew_advice"){
   if(!S.pend||!S.pend.o[p.opt])return;
   const a=(S.pend.adv=S.pend.adv||{}),l=(a[p.opt]=a[p.opt]||[]);if(!l.includes(p.by))l.push(p.by);
-  say(`⚓ 선원 <b>${esc(p.by)}</b>${jo(p.by,"이(가)")}${p.role?`(${esc(p.role)})`:""} 귓속말한다. "${esc(plain(S.pend.o[p.opt][0]).replace(/[ ✓·].*$/,""))}… 저는 이쪽이 좋겠습니다."`);renderAll()}};
+  say(`※ 선원 <b>${esc(p.by)}</b>${jo(p.by,"이(가)")}${p.role?`(${esc(p.role)})`:""} 귓속말한다. "${esc(plain(S.pend.o[p.opt][0]).replace(/[ ✓·].*$/,""))}… 저는 이쪽이 좋겠습니다."`);renderAll()}};
+
+/* ---- 함께하는 선원 (갑판 오른쪽 위 창) — 선장·선원 화면 공통 ---- */
+const RICON=Object.fromEntries(ROLES.map(r=>[r[0],r[1]]));
+function crewRow(o){
+ const ri=Math.max(0,RANKS.indexOf(o.rank)),next=RXP[ri+1],pc=next?Math.round(100*(o.xp-RXP[ri])/(next-RXP[ri])):100;
+ const days=o.joined?Math.max(1,Math.ceil((O.srvNow()-o.joined)/86400000)):0;
+ const last=o.on?"접속 중":o.last?`${Math.max(1,Math.round((O.srvNow()-o.last)/60000))}분 전 접속`:"아직 접속 기록 없음";
+ return `<div class="crew-row"><div class="av">${o.icon}</div><div class="ci"><div class="cn"><b>${esc(o.name)}</b>${o.tag?` <span class="chip">${esc(o.tag)}</span>`:""}<span class="dot${o.on?" on":""}" title="${last}"></span></div><div class="sub sm">${o.sub||""}${o.rank?`${o.sub?" · ":""}${esc(o.rank)}`:""}${days?` · 승선 ${days}일째`:""}${o.tasks!=null?` · 일한 횟수 ${o.tasks}`:""} · ${last}</div>${o.rank?`<div class="xpb"><i style="width:${pc}%"></i></div>`:""}</div></div>`}
+O.renderCrewInfo=()=>{
+ const el=$("crewinfo");if(!el||!O.data)return;const c=O.data.crew;let h="";
+ if(O.crewMode){
+  const m=c.memberOf;if(!m)return;const sh=m.ship;
+  h+=crewRow({icon:"船",name:m.captain,tag:"선장",sub:sh?esc(sh.ship):"",on:!!(sh&&sh.online),last:sh?sh.at:0});
+  h+=m.shipmates.map(x=>crewRow({icon:(ROLE_TXT[x.role]||[])[1]||"員",name:x.cname||x.name,tag:x.role||"직책 미정",rank:x.rank,xp:x.xp,tasks:x.tasks,joined:x.joined,on:x.name===O.user.username||(!!x.last&&O.srvNow()-x.last<120000),last:x.last,sub:x.name===O.user.username?"나":""})).join("")}
+ else if(gameOn()){
+  h=c.captainOf.length?c.captainOf.map(m=>crewRow({icon:(ROLE_TXT[m.role]||[])[1]||"員",name:m.name,tag:m.role||"직책 미정",rank:m.rank,xp:m.xp,tasks:m.tasks,joined:m.joined,on:m.online,last:m.last})).join(""):`<div class="sub sm">함께하는 선원이 없다. 오른쪽 아래 '바다 위의 사람들'에서 친구를 선원으로 초대해 보자. 선원은 직책에 맞는 일을 하고, 전투와 잠수도 함께한다.</div>`}
+ else return;
+ if(el._h!==h){el._h=h;el.innerHTML=h}};
 
 /* ================================================================
    선원 쪽 — 같은 화면 틀을 쓰되 선장실 대신 선원실
@@ -260,7 +278,7 @@ const D8=["북","북동","동","남동","남","남서","서","북서"];
 function side(){
  const m=O.data.crew.memberOf,sh=m.ship,sn=snapOf(),mm=me();
  $("csn").textContent=sh?sh.ship:"배";$("cscap").textContent=`선장 ${m.captain}`+(sh&&sh.online?" · 접속 중":"");
- $("csclk").textContent=sn.d?`${sn.hr!=null?(nightAmt(sn.hr)>.5?"🌙 ":nightAmt(sn.hr)>0?"🌆 ":"☀ "):""}항해 ${sn.d}일째`:"";applyTod(sn.hr);
+ $("csclk").textContent=sn.d?`${sn.hr!=null?TODI[todOf(sn.hr)]+" ":""}항해 ${sn.d}일째`:"";if(sn.hr!=null)applyTod(sn.hr);
  const state=!sh?"아직 출항 전":!sh.online?`선장이 자리를 비웠다 (${Math.max(0,Math.round((O.srvNow()-sh.at)/60000))}분 전)`:sn.dv?`${sn.dv.n} 잠수 중`:sh.loc==="port"?`${sn.in||"부두"}에 정박`:sn.sail?"항해 중":"바다에서 닻을 내림";
  $("cswh").textContent=state;
  const set=(k,v,mx,w)=>{$("c"+k+"v").textContent=Math.round(v)+" / "+mx;$("c"+k+"b").firstElementChild.style.width=Math.max(0,Math.min(100,v/Math.max(1,mx)*100))+"%";$("c"+k+"b").className="bar"+(v/Math.max(1,mx)<w?" w":"")};
@@ -277,22 +295,20 @@ function side(){
 /* ---- 갑판 ---- */
 function mapSvg(sh,sn){
  const x=sh.x,y=sh.y,seen=new Set(sn.seen||[]);I.forEach((w,i)=>{if(i===0)seen.add(0)});
- let s=`<g transform="translate(${VW/2-x*K},${VH/2-y*K})"><g stroke="var(--line)" stroke-width=".5">`;
+ let s=`<g transform="translate(${VW/2-x*K},${VH/2-y*K})"><rect x="${(x-20)*K}" y="${(y-16)*K}" width="${40*K}" height="${32*K}" fill="url(#wv)"/><g stroke="var(--line)" stroke-width=".6" stroke-dasharray="1 6" stroke-opacity=".8">`;
  for(let gx=Math.floor((x-16)/5)*5;gx<x+16;gx+=5)s+=`<line x1="${gx*K}" y1="${(y-12)*K}" x2="${gx*K}" y2="${(y+12)*K}"/>`;
  for(let gy=Math.floor((y-12)/5)*5;gy<y+12;gy+=5)s+=`<line x1="${(x-16)*K}" y1="${gy*K}" x2="${(x+16)*K}" y2="${gy*K}"/>`;s+=`</g>`;
  const vv=sn.vr||6;
  I.forEach((w,i)=>{if(!seen.has(i))return;const dx=dl(w.x-x,WW),dy=dl(w.y-y,WH);if(Math.abs(dx)>VW/2/K+w.rm+1||Math.abs(dy)>VH/2/K+w.rm+1)return;
   const ox=Math.round((x+dx-w.x)/WW)*WW*K,oy=Math.round((y+dy-w.y)/WH)*WH*K,dd=Math.hypot(dx,dy),op=dd-w.rm<=vv?1:.6,na=Math.max(.3,Math.min(1,1.2-dd/(vv*1.2)));
-  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="var(--sh)"/><path d="${w.p}" fill="var(--land)" stroke="var(--sub)" stroke-width="1"/><path d="${w.p3}" fill="var(--hi)"/><text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.n}</text></g>`});
+  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="url(#ht)"/><path d="${w.p}" fill="var(--land)" stroke="var(--ink)" stroke-width="1.3" stroke-linejoin="round"/><path d="${w.p3}" fill="var(--hi)" fill-opacity=".55"/><text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.n}</text></g>`});
  s+=`<circle cx="${x*K}" cy="${y*K}" r="${vv*K}" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>`;
  if(sn.tx!=null)s+=`<line x1="${x*K}" y1="${y*K}" x2="${(x+dl(sn.tx-x,WW))*K}" y2="${(y+dl(sn.ty-y,WH))*K}" stroke="var(--acc)" stroke-dasharray="4 4"/><circle cx="${(x+dl(sn.tx-x,WW))*K}" cy="${(y+dl(sn.ty-y,WH))*K}" r="4" fill="none" stroke="var(--acc)"/>`;
  s+=`</g><g transform="translate(${VW/2},${VH/2}) rotate(${sh.hd}) scale(${[1.3,1.1,.95,.85][sh.lv||0]})">${shipG(sh.lv||0)}</g>`;
  if(sn.wind!=null)s+=`<g transform="translate(${VW-28},${VH-40}) rotate(${sn.wind})" stroke="var(--sub)" fill="none"><line y1="14" y2="-14"/><path d="M-4,-8 L0,-14 L4,-8"/></g><text x="${VW-28}" y="${VH-12}" font-size="8" text-anchor="middle" fill="var(--sub)">바람</text>`;
- s+=`<g transform="translate(34,36)" fill="none" stroke="var(--sub)"><circle r="17"/><circle r="13" stroke-dasharray="1 3"/><path d="M0,-15 L3,-3 L15,0 L3,3 L0,15 L-3,3 L-15,0 L-3,-3Z" fill="var(--hi)"/><path d="M0,-15 L3,-3 L-3,-3Z" fill="var(--warn)" stroke="none"/><text y="-21" font-size="9" text-anchor="middle" fill="var(--warn)" stroke="none">N</text></g>`;
- s+=`<rect width="${VW}" height="${VH}" fill="#0a1530" opacity="${(nightAmt(sn.hr)*.5).toFixed(2)}" style="pointer-events:none"/>`;
  return s}
 const cb=(label,fn,dis,pri,attr)=>`<button class="${pri?"pri":""}" ${attr||""} onclick="${fn}" ${dis?"disabled":""}>${label}</button>`;
-const gp=(t,b,h)=>`<div class="grp"><div class="gt">${t}</div>${b}${h?`<div class="sub sm" style="margin-top:2px">${h}</div>`:""}</div>`;
+const gp=(t,b,h)=>`<div class="grp"><div class="gt">${t}</div><div class="gb">${b}${h?`<div class="sub sm" style="margin-top:2px">${h}</div>`:""}</div></div>`;
 const supBtns=(arr,mm)=>arr.map(([k,ic,n,d])=>{const sec=secs("sup:"+k);return cb(`${ic} ${n}${sec>0?` (${sec}초)`:""}`,`Online.support('${k}')`,sec>0||mm.cond<8,0,`data-sup="${k}" data-l="${ic} ${n}" title="${esc(d)}"`)}).join("");
 const supHelp=arr=>arr.map(x=>`${x[1]} ${x[3]}`).join(" · ");
 function deck(){
@@ -302,7 +318,7 @@ function deck(){
  const own=DUTY.find(d=>d[3]===mm.role),rest=DUTY.filter(d=>d!==own);
  const dbtn=d=>{const sec=secs(d[0]);return cb(`${d[1]} ${d[2]}${sec>0?` (${sec}초)`:""}`,`Online.duty('${d[0]}')`,sec>0||mm.cond<12,d===own,`data-duty="${d[0]}" data-l="${d[1]} ${d[2]}" title="${esc(d[4])}"`)};
  const rsec=secs("rest");
- $("acts").innerHTML=act+gp("배 위에서",(own?dbtn(own):"")+rest.map(dbtn).join(""),`${own?`<b>${own[1]} ${own[2]}</b>은(는) 내 직책(${esc(mm.role)})의 일이라 효과와 월급이 크다. `:""}일마다 컨디션이 12 든다.`)+gp("휴식",cb(`😴 해먹에서 쉬기${rsec>0?` (${rsec}초)`:""}`,"Online.rest()",rsec>0||mm.cond>=95,0,`data-rest="1" data-l="😴 해먹에서 쉬기"`)+cb("🍲 식사","Online.cgo('inv')",0));
+ $("acts").innerHTML=act+gp("배 위에서",(own?dbtn(own):"")+rest.map(dbtn).join(""),`${own?`<b>${own[1]} ${own[2]}</b>은(는) 내 직책(${esc(mm.role)})의 일이라 효과와 월급이 크다. `:""}일마다 컨디션이 12 든다.`)+gp("휴식",cb(`해먹에서 쉬기${rsec>0?` (${rsec}초)`:""}`,"Online.rest()",rsec>0||mm.cond>=95,0,`data-rest="1" data-l="해먹에서 쉬기"`)+cb("식사","Online.cgo('inv')",0));
  // 전투 / 잠수 / 장면
  const bt=$("btl"),pe=$("pend");
  if(sn.bt){const b=sn.bt;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">전투 — ${esc(b.t)} · 라운드 ${b.rd}</h2><div class="two"><div><h3>적</h3>${b.en.map(e=>`<div class="${e.hp<=0?"dead":""}"><div class="row"><span>${esc(e.n)}</span><span class="sm">${e.hp}/${e.mhp}</span></div>${bar(e.hp,e.mhp)}</div>`).join("")}</div><div><h3>아군</h3>${b.al.map(a=>`<div class="${a.hp<=0?"dead":""}"><div class="row"><span>${esc(a.n)} ${a.role?`<span class="sub sm">${esc(a.role)}</span>`:""}</span><span class="sm">${a.hp}/${a.mhp}</span></div>${bar(a.hp,a.mhp)}</div>`).join("")}</div></div><div style="margin-top:8px">${gp("지원",supBtns(BSUP,mm),supHelp(BSUP)+" — 선장이 다음에 행동할 때 전투에 반영된다")}</div><div class="sub sm bt-log">${(b.log||[]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`}
@@ -313,7 +329,7 @@ function deck(){
  // 기록: 선장의 항해일지 + 내가 한 일
  const lg=[...crewLog.map(x=>`<div>${esc(x)}</div>`),...(sn.logs||[]).map(x=>`<div>${esc(x)}</div>`)];
  $("log").innerHTML=lg.join("")||"<div>(기록 없음)</div>";
- O.renderChat();O.hookCrewChat&&O.hookCrewChat()}
+ O.renderChat();O.hookCrewChat&&O.hookCrewChat();O.renderCrewInfo()}
 function timers(){
  if(!O.crewMode||!O.data||!O.data.crew.me)return;const mm=me();
  const lab=(b,sec)=>{const l=b.dataset.l;if(l)b.textContent=sec>0?`${l} (${sec}초)`:l};
@@ -322,7 +338,7 @@ function timers(){
  document.querySelectorAll("[data-rest]").forEach(b=>{const sec=secs("rest");b.disabled=sec>0||mm.cond>=95;lab(b,sec)})}
 
 const note=t=>{crewLog.unshift(`${stamp()} ${t}`);crewLog.length=Math.min(crewLog.length,12)};
-async function act(fn){try{await fn()}catch(e){note("⚠ "+e.message)}O.syncNow();render()}
+async function act(fn){try{await fn()}catch(e){note("※ "+e.message)}O.syncNow();render()}
 O.duty=k=>act(async()=>{const r=await O.api("/crew/duty",{duty:k});
  let extra="";if(r.mine){for(const it in r.mine){if(bagAdd(it,r.mine[it]))extra=` (내 몫으로 ${it} ${r.mine[it]} 챙겼다)`}}
  note(`${r.msg}${r.wage?` (월급 +${r.wage}G)`:""}${extra}`);diary(r.msg)});
@@ -334,8 +350,8 @@ O.role=r=>{const name=cleanName(($("cname")||{}).value||"").trim(),raw=(($("cnam
 O.crewDeliveries=async list=>{
  const mine=(list||[]).filter(d=>d.kind==="coop_note");if(!mine.length)return;
  const got=(await O.api("/claim",{ids:mine.map(d=>d.id)})).deliveries;
- got.forEach(d=>{const t=cleanStr(d.payload&&d.payload.text,120);if(t){note("⚓ "+t);diary(t)}})};
-O.crewSay=t=>{const m=O.data&&O.data.crew.memberOf;if(!m)return;O.api("/chat",{channel:"crew:"+m.captainId,text:t}).then(()=>O.syncNow()).catch(e=>note("⚠ "+e.message))};
+ got.forEach(d=>{const t=cleanStr(d.payload&&d.payload.text,120);if(t){note("※ "+t);diary(t)}})};
+O.crewSay=t=>{const m=O.data&&O.data.crew.memberOf;if(!m)return;O.api("/chat",{channel:"crew:"+m.captainId,text:t}).then(()=>O.syncNow()).catch(e=>note("※ "+e.message))};
 
 /* ---- 주방 ---- */
 function kitchen(){
@@ -364,7 +380,7 @@ O.cserve=k=>{if(!(cs.bag[k]>0))return;act(async()=>{await O.api("/crew/serve",{i
 function cabin(){
  const m=O.data.crew.memberOf,mm=me(),ri=Math.max(0,RANKS.indexOf(mm.rank)),next=RXP[ri+1],sn=snapOf();
  const seen=(sn.seen||[]).map(i=>I[i]&&I[i].n).filter(Boolean);
- const talk=[["식사 시간입니다, 선장님. 든든히 드셔야 합니다!","🍲 식사하시죠"],["다들 지쳤습니다. 닻을 내리고 잠시 쉬어 가면 어떨까요?","😴 쉬어 가요"],["뭔가 불길한 기운이 느껴집니다. 조심하세요, 선장님!","⚠ 불길해요"],["항해가 순조롭습니다, 선장님!","👍 순조로워요"],...(seen.length?[[`근처 ${pick(seen)}에 들러 보면 어떨까요?`,"🏝 섬에 들러요"]]:[])];
+ const talk=[["식사 시간입니다, 선장님. 든든히 드셔야 합니다!","식사하시죠"],["다들 지쳤습니다. 닻을 내리고 잠시 쉬어 가면 어떨까요?","쉬어 가요"],["뭔가 불길한 기운이 느껴집니다. 조심하세요, 선장님!","불길해요"],["항해가 순조롭습니다, 선장님!","순조로워요"],...(seen.length?[[`근처 ${pick(seen)}에 들러 보면 어떨까요?`,"섬에 들러요"]]:[])];
  $("v-cabin").innerHTML=VHD(IC.cab,"선원실","선원들이 쉬고 짐을 두는 방 — 해먹과 사물함, 그리고 내 일지")+
  ` <div class="two"><div><h2>직책</h2><div class="row seat"><span>${(ROLE_TXT[mm.role]||[])[1]||""} <b>${esc(mm.role)}</b><br><span class="sub sm">${esc((ROLE_TXT[mm.role]||[])[2]||"")}</span></span></div><div class="sub sm">직책은 탑승하기 전에 정한다. 바꾸려면 배에서 내렸다가 다시 탑승해야 한다.</div>
  <h2>동료</h2>${m.shipmates.map(x=>`<div class="row"><span>${esc(x.cname||x.name)}${x.name===O.user.username?" (나)":""}</span><span class="sub sm">${esc(x.role||"직책 미정")}</span></div>`).join("")||"<div class='sub sm'>없음</div>"}

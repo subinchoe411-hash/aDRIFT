@@ -351,7 +351,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT id,kind,payload,created FROM deliveries WHERE user_id=? AND claimed IS NULL ORDER BY id LIMIT 40", user.id),
     P(env, "SELECT t.*,u.username fromName FROM trades t JOIN users u ON u.id=t.from_id WHERE t.to_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
     P(env, "SELECT t.*,u.username toName FROM trades t JOIN users u ON u.id=t.to_id WHERE t.from_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
-    P(env, "SELECT c.member_id id,u.username,cp.seen,cp.role,cp.xp,cp.cname FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", user.id),
+    P(env, "SELECT c.member_id id,u.username,cp.seen,cp.role,cp.xp,cp.cname,cp.tasks,c.joined FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", user.id),
     P(env, "SELECT i.id,i.captain_id,u.username captainName,i.created FROM crew_invites i JOIN users u ON u.id=i.captain_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
@@ -381,21 +381,21 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   if (crewRow) stm2.push(
     P(env, "SELECT username FROM users WHERE id=?", crewRow.captain_id),
     P(env, "SELECT * FROM presence WHERE user_id=?", crewRow.captain_id),
-    P(env, "SELECT u.username,cp.role,cp.cname FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
+    P(env, "SELECT u.username,cp.role,cp.cname,cp.xp,cp.tasks,cp.seen,c.joined FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
     P(env, "SELECT duty,ready FROM crew_cd WHERE member_id=?", user.id));
   const r2 = (await env.DB.batch(stm2)).map((x) => x.results || []);
   const chat = {};
   chans.forEach((ch, i) => { chat[ch] = r2[i]; });
 
   const crew = { captainOf: [], memberOf: null, invitesIn: invInR, invitesOut: invOutR, me: null };
-  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.cname || r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0 }));
+  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.cname || r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0, tasks: r.tasks || 0, joined: r.joined, last: r.seen || 0 }));
   let cd = {};
   if (crewRow) {
     const k = chans.length, cp = r2[k + 1][0];
     cd = Object.fromEntries(r2[k + 3].map((r) => [r.duty, r.ready]));
     crew.memberOf = {
       captainId: crewRow.captain_id, captain: r2[k][0] && r2[k][0].username,
-      shipmates: r2[k + 2].map((r) => ({ name: r.username, cname: r.cname || "", role: r.role || "" })),
+      shipmates: r2[k + 2].map((r) => ({ name: r.username, cname: r.cname || "", role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0, tasks: r.tasks || 0, joined: r.joined, last: r.seen || 0 })),
       ship: cp ? { name: cp.name, ship: cp.ship, lv: cp.lv, x: cp.x, y: cp.y, hd: cp.hd, loc: cp.loc, isl: cp.isl, online: t - cp.updated < FRESH * 2, snap: json(cp.snap), at: cp.updated } : null,
     };
   }
