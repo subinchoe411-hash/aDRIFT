@@ -26,6 +26,12 @@ const DUTY=[
 const BSUP=[["fire","💥","포격 지원","적 하나를 크게 때린다"],["mend","🩹","응급처치","가장 다친 사람을 치료한다"],["guard","🛡","방패 태세","선장 앞을 막아 피해를 줄인다"],["distract","📣","교란","적이 한 턴 움직이지 못한다"]];
 const DSUP=[["air","🫧","공기 보급","선장의 산소를 채운다"],["rescue","🪢","구조 줄","선장의 체력을 회복시킨다"]];
 const plain=t=>O.plain(t);
+// 받침에 따라 이/가, 은/는, 을/를, 과/와 를 맞춘다 (한글이 아니면 받침 없음으로 본다)
+const batchim=w=>{const ch=String(w).trim().slice(-1),c=ch.charCodeAt(0);if(/[0-9]/.test(ch))return "013678".includes(ch);return c>=0xac00&&c<=0xd7a3&&(c-0xac00)%28!==0};
+const JS={"이(가)":["이","가"],"은(는)":["은","는"],"을(를)":["을","를"],"과(와)":["과","와"]};
+const jo=(w,m)=>JS[m][batchim(w)?0:1];
+// 템플릿의 {A} {B} {N} {I} 를 채운다. 뒤에 조사 표기가 붙어 있으면 이름 끝소리에 맞춘다 (이름은 <b> 로 감싼다)
+function fillTpl(t,v){return t.replace(/\{([ABNI])\}(이\(가\)|은\(는\)|을\(를\)|과\(와\))?/g,(_,k,m)=>{const w=v[k]==null?"":String(v[k]);return "<b>"+esc(w)+"</b>"+(m?jo(w,m):"")})}
 const aboard=()=>{const r=O.data;return r&&r.crew?r.crew.captainOf.filter(m=>m.online):[]};
 
 /* ================================================================
@@ -39,7 +45,7 @@ O.advBonus=i=>{const a=S.pend&&S.pend.adv&&S.pend.adv[i];return a?Math.min(.1,.0
 
 // 선원이 볼 수 있게 올리는 배 상태
 O.snapExtra=()=>{
- const x={wind:Math.round(S.wind),ws:Math.round(S.ws*10)/10,vr:Math.round(vis()*10)/10};
+ const x={hr:Math.round(S.t%1440/6)/10,wind:Math.round(S.wind),ws:Math.round(S.ws*10)/10,vr:Math.round(vis()*10)/10};
  if(S.tx!==null){x.tx=Math.round(S.tx*10)/10;x.ty=Math.round(S.ty*10)/10;try{x.dst=Math.round(remD()*10)/10}catch(e){}}
  if(S.act)x.act=S.act.n;
  if(S.bt&&!S.bt.done){const b=S.bt;x.bt={t:b.t,rd:b.rd,tg:b.tg,en:b.en.map(e=>({n:e.n,hp:Math.max(0,Math.round(e.hp)),mhp:e.mhp})),al:b.al.map(a=>({n:a.n,hp:Math.max(0,Math.round(hpv(a))),mhp:Math.round(mhv(a)),role:a.role||""})),log:b.log.slice(-3).map(plain)}}
@@ -90,8 +96,9 @@ const lastAt={};
 function pickCrew(){const cr=aboard();if(!cr.length)return null;const A=cr[R(cr.length)],others=cr.filter(m=>m.id!==A.id);return{A,B:others.length?pick(others):A,cr}}
 function crewText(kind,o){
  o=o||{};const p=pickCrew();if(!p||!CL[kind])return "";
- let t=pick(CL[kind]);if(kind==="amb"&&p.A.role&&RL[p.A.role]&&rnd()<.5)t=pick(RL[p.A.role]);
- return t.replace(/\{A\}/g,"<b>"+esc(p.A.name)+"</b>").replace(/\{B\}/g,"<b>"+esc(p.B.name)+"</b>").replace(/\{N\}/g,esc((o.n&&o.n.name)||"")).replace(/\{I\}/g,esc(o.isl||""))}
+ const pool=p.cr.length>1?CL[kind]:CL[kind].filter(x=>!x.includes("{B}"));   // 선원이 한 명이면 "A과 B" 문장은 쓰지 않는다
+ let t=pick(pool.length?pool:CL[kind]);if(kind==="amb"&&p.A.role&&RL[p.A.role]&&rnd()<.5)t=pick(RL[p.A.role]);
+ return fillTpl(t,{A:p.A.name,B:p.B.name,N:(o.n&&o.n.name)||"",I:o.isl||""})}
 function crewLine(kind,o){
  if(!gameOn()||!aboard().length)return;
  o=o||{};const gap=o.gap==null?6:o.gap;if(S.t-(lastAt[kind]||-999)<gap)return;
@@ -131,7 +138,7 @@ const rankN=r=>Math.max(0,RANKS.indexOf(r));
 function mkAlly(m){const r=rankN(m.rank);return{n:m.name,role:"선원"+(m.role?"·"+m.role:""),hp:40+r*12,mhp:40+r*12,atk:7+r*2,def:1+Math.floor(r/2),crew:m.id,st:{},q:[],acted:0}}
 function joinBattle(){
  const b=S.bt,cr=aboard().slice(0,4);if(!cr.length)return;let i0=R(CL.btStart.length);
- cr.forEach(m=>{b.al.push(mkAlly(m));bl(`선원 ${m.name}이(가) 갑판으로 뛰어나왔다!`);say("⚓ "+CL.btStart[(i0++)%CL.btStart.length].replace(/\{A\}/g,"<b>"+esc(m.name)+"</b>"))});
+ cr.forEach(m=>{b.al.push(mkAlly(m));bl(`선원 ${m.name}${jo(m.name,"이(가)")} 갑판으로 뛰어나왔다!`);say("⚓ "+fillTpl(CL.btStart[(i0++)%CL.btStart.length],{A:m.name}))});
  renderAll()}
 function crewRound(){
  const b=S.bt;if(!b||b.done)return;
@@ -140,11 +147,11 @@ function crewRound(){
   if(hpv(a)<=0)continue;const en=b.en.filter(e=>e.hp>0);if(!en.length)break;
   const tg=(b.en[b.tg]&&b.en[b.tg].hp>0)?b.en[b.tg]:en[0],q=a.q.shift(),kind=q?q.kind:"atk",pw=q?q.power:0;a.acted++;
   if(kind==="atk")bHit(tg,bDmg(a.atk,tg.def),a.n);
-  else if(kind==="fire"){bl(`${a.n}이(가) 포를 끌어 겨눈다!`);bHit(tg,bDmg(a.atk*1.4+pw*.8,tg.def),a.n+"(포격)")}
+  else if(kind==="fire"){bl(`${a.n}${jo(a.n,"이(가)")} 포를 끌어 겨눈다!`);bHit(tg,bDmg(a.atk*1.4+pw*.8,tg.def),a.n+"(포격)")}
   else if(kind==="mend"){const w=bWeak();if(w)bHeal(w,pw,a.n+"의 응급처치")}
-  else if(kind==="guard"){b.def=true;b.gd=Math.max(0,pw-1);bl(`${a.n}이(가) 방패를 들고 선장 앞을 막아섰다!`)}
-  else if(kind==="distract"){const t2=en.slice().sort((x,y)=>y.hp-x.hp)[0];t2.st.stun=Math.max(t2.st.stun||0,pw);bl(`${a.n}이(가) 소리를 질러 ${t2.n}의 시선을 끈다! (${t2.n}이(가) 잠시 움직이지 못한다)`)}
-  if(hpv(a)<=0)bl(`${a.n}이(가) 쓰러졌다!`)}
+  else if(kind==="guard"){b.def=true;b.gd=Math.max(0,pw-1);bl(`${a.n}${jo(a.n,"이(가)")} 방패를 들고 선장 앞을 막아섰다!`)}
+  else if(kind==="distract"){const t2=en.slice().sort((x,y)=>y.hp-x.hp)[0];t2.st.stun=Math.max(t2.st.stun||0,pw);bl(`${a.n}${jo(a.n,"이(가)")} 소리를 질러 ${t2.n}의 시선을 끈다! (${t2.n}${jo(t2.n,"이(가)")} 잠시 움직이지 못한다)`)}
+  if(hpv(a)<=0)bl(`${a.n}${jo(a.n,"이(가)")} 쓰러졌다!`)}
  if(b.en.every(e=>e.hp<=0))bEnd("win")}
 function afterBattle(b,kind){
  const al=b.al.slice(1);if(!al.length)return;
@@ -170,22 +177,22 @@ O.applyExtra=d=>{
  }else if(d.kind==="crew_support"){
   const by=esc(p.by),k=p.kind,pw=Math.max(0,Math.min(60,Math.floor(+p.power)||0));
   if(k==="fire"||k==="mend"||k==="guard"||k==="distract"){
-   if(!S.bt||S.bt.done){say(`⚓ 전투가 끝나 ${by}의 ${SUPNAME[k]}이(가) 닿지 못했다.`);return}
+   if(!S.bt||S.bt.done){say(`⚓ 전투가 끝나 ${by}의 ${SUPNAME[k]}${jo(SUPNAME[k],"이(가)")} 닿지 못했다.`);return}
    let a=S.bt.al.slice(1).find(x=>x.n===p.by);if(!a){a=mkAlly({name:p.by,role:p.role,rank:RANKS[0]});S.bt.al.push(a)}
    if(a.q.length<2)a.q.push({kind:k,power:pw});
    const msg={fire:"포를 끌어 겨눈다",mend:"붕대와 약초를 들고 달려온다",guard:"방패를 들고 선장 곁으로 다가선다",distract:"적의 시선을 끌 준비를 한다"}[k];
-   say(`⚓ <b>${by}</b>이(가) ${msg}! (${SUPNAME[k]})`);bl(`${p.by}이(가) ${SUPNAME[k]}을(를) 준비한다.`);renderAll();
+   say(`⚓ <b>${by}</b>${jo(p.by,"이(가)")} ${msg}! (${SUPNAME[k]})`);bl(`${p.by}${jo(p.by,"이(가)")} ${SUPNAME[k]}${jo(SUPNAME[k],"을(를)")} 준비한다.`);renderAll();
   }else if(k==="air"){
    if(!S.inC){say(`⚓ 잠수가 끝나 ${by}의 공기 보급이 닿지 못했다.`);return}
-   S.air=Math.min(S.airMax,S.air+pw);say(`⚓ 수면의 <b>${by}</b>이(가) 공기 주머니를 줄에 매달아 내려보냈다. (산소 +${pw})`);renderAll();
+   S.air=Math.min(S.airMax,S.air+pw);say(`⚓ 수면의 <b>${by}</b>${jo(p.by,"이(가)")} 공기 주머니를 줄에 매달아 내려보냈다. (산소 +${pw})`);renderAll();
   }else if(k==="rescue"){
    if(!S.inC){say(`⚓ 잠수가 끝나 ${by}의 구조 줄이 닿지 못했다.`);return}
-   S.hp=Math.min(hpm(),S.hp+pw);say(`⚓ <b>${by}</b>이(가) 줄을 힘껏 당겨 선장을 안전한 곳으로 끌어당겼다. (체력 +${pw})`);renderAll();
+   S.hp=Math.min(hpm(),S.hp+pw);say(`⚓ <b>${by}</b>${jo(p.by,"이(가)")} 줄을 힘껏 당겨 선장을 안전한 곳으로 끌어당겼다. (체력 +${pw})`);renderAll();
   }
  }else if(d.kind==="crew_advice"){
   if(!S.pend||!S.pend.o[p.opt])return;
   const a=(S.pend.adv=S.pend.adv||{}),l=(a[p.opt]=a[p.opt]||[]);if(!l.includes(p.by))l.push(p.by);
-  say(`⚓ 선원 <b>${esc(p.by)}</b>${p.role?`(${esc(p.role)})`:""}이(가) 귓속말한다. "${esc(plain(S.pend.o[p.opt][0]).replace(/[ ✓·].*$/,""))}… 저는 이쪽이 좋겠습니다."`);renderAll()}};
+  say(`⚓ 선원 <b>${esc(p.by)}</b>${jo(p.by,"이(가)")}${p.role?`(${esc(p.role)})`:""} 귓속말한다. "${esc(plain(S.pend.o[p.opt][0]).replace(/[ ✓·].*$/,""))}… 저는 이쪽이 좋겠습니다."`);renderAll()}};
 
 /* ================================================================
    선원 쪽 — 같은 화면 틀을 쓰되 선장실 대신 선원실
@@ -220,7 +227,7 @@ function build(){
  $("side").innerHTML=`<div id="sm"><div class="smt"><span id="smn"></span><span id="smg"></span><button id="sbt" onclick="Online.cside()">정보 ▾</button></div><div class="smb"><span><em>선체</em><div class="bar" id="smub"><i></i></div></span><span><em>컨디션</em><div class="bar" id="smcb"><i></i></div></span></div></div>
  <div id="sbody"><b id="csn" style="font-size:16px"></b><div class="sub sm" id="cscap"></div><div class="sub sm" id="csclk" style="margin-top:8px"></div><div class="sub sm" id="cswh"></div>
  <h2>배 상태</h2><div class="row"><span>선체</span><span id="chv" class="sm"></span></div><div class="bar" id="chb"><i></i></div><div class="row"><span>허기 (선장)</span><span id="cfv" class="sm"></span></div><div class="bar" id="cfb"><i></i></div><div class="row"><span>체력 (선장)</span><span id="cpv" class="sm"></span></div><div class="bar" id="cpb"><i></i></div>
- <h2>나</h2><div class="row"><span>직책</span><span id="crl"></span></div><div class="row"><span>계급</span><span id="crk"></span></div><div class="row"><span>컨디션</span><span id="ccv" class="sm"></span></div><div class="bar" id="ccb"><i></i></div><div class="row"><span>쌓인 월급</span><span id="cpu"></span></div><div class="row"><span>오늘 더 받을 수 있는 월급</span><span id="cdl" class="sm"></span></div>
+ <h2>나</h2><div class="row"><span>이름</span><span id="cnm"></span></div><div class="row"><span>직책</span><span id="crl"></span></div><div class="row"><span>계급</span><span id="crk"></span></div><div class="row"><span>컨디션</span><span id="ccv" class="sm"></span></div><div class="bar" id="ccb"><i></i></div><div class="row"><span>쌓인 월급</span><span id="cpu"></span></div><div class="row"><span>오늘 더 받을 수 있는 월급</span><span id="cdl" class="sm"></span></div>
  <h2>항해</h2><div class="row"><span>방위</span><span id="chd"></span></div><div class="row"><span>속력</span><span id="ckn"></span></div><div class="row"><span>바람</span><span id="cwd"></span></div><div class="row"><span>남은 거리</span><span id="cds"></span></div>
  <h2>메뉴</h2><div><button onclick="Online.exitCrew()">타이틀로</button><button onclick="Online.leaveShip()">배에서 내리기</button></div><div class="sub sm">타이틀로 가도 배에는 계속 타고 있습니다.</div></div>`;
  $("tabs").innerHTML=[["deck","갑판"],["kitchen","주방"],["cabin","선원실"],["inv","소지품"]].map(([k,n])=>`<button data-t="${k}" onclick="Online.cgo('${k}')">${n}</button>`).join("");
@@ -245,23 +252,25 @@ function render(){
 function picker(){
  const m=O.data.crew.memberOf,sh=m.ship;
  $("cpick").innerHTML=`<div class="pan"><h2 style="margin-top:0">직책을 정하세요</h2>
+ <div class="sm" style="margin:8px 0 4px">선원 캐릭터의 이름 <span class="sub">(항해일지와 채팅에 아이디 대신 이 이름이 보입니다)</span></div><input id="cname" maxlength="12" placeholder="예: 바람이" style="width:min(320px,100%);margin-bottom:10px">
  <div class="sub sm" style="margin-bottom:8px">${esc(m.captain)} 선장의 ${esc(sh?sh.ship:"배")}에 선원으로 타기 전에 맡을 직책을 하나 정합니다. 직책에 맞는 장면 선택지는 선장이 더 유리해지고, 직책의 일은 효과와 월급이 커집니다. <b>탑승 중에는 바꿀 수 없고</b>, 바꾸려면 배에서 내렸다가 다시 탑승해야 합니다.</div>
- ${ROLES.map(([r,ic,d])=>`<div class="row seat"><span>${ic} <b>${r}</b><br><span class="sub sm">${d}</span></span><button class="pri" onclick="Online.role('${r}')">이 직책으로 시작</button></div>`).join("")}</div>`}
+ ${ROLES.map(([r,ic,d])=>`<div class="row seat"><span>${ic} <b>${r}</b><br><span class="sub sm">${d}</span></span><button class="pri" onclick="Online.role('${r}')">이 직책으로 시작</button></div>`).join("")}</div>`;
+ const nm=$("cname");if(nm&&!nm.value&&me().cname)nm.value=me().cname}
 const D8=["북","북동","동","남동","남","남서","서","북서"];
 function side(){
  const m=O.data.crew.memberOf,sh=m.ship,sn=snapOf(),mm=me();
  $("csn").textContent=sh?sh.ship:"배";$("cscap").textContent=`선장 ${m.captain}`+(sh&&sh.online?" · 접속 중":"");
- $("csclk").textContent=sn.d?`항해 ${sn.d}일째`:"";
+ $("csclk").textContent=sn.d?`${sn.hr!=null?(nightAmt(sn.hr)>.5?"🌙 ":nightAmt(sn.hr)>0?"🌆 ":"☀ "):""}항해 ${sn.d}일째`:"";applyTod(sn.hr);
  const state=!sh?"아직 출항 전":!sh.online?`선장이 자리를 비웠다 (${Math.max(0,Math.round((O.srvNow()-sh.at)/60000))}분 전)`:sn.dv?`${sn.dv.n} 잠수 중`:sh.loc==="port"?`${sn.in||"부두"}에 정박`:sn.sail?"항해 중":"바다에서 닻을 내림";
  $("cswh").textContent=state;
  const set=(k,v,mx,w)=>{$("c"+k+"v").textContent=Math.round(v)+" / "+mx;$("c"+k+"b").firstElementChild.style.width=Math.max(0,Math.min(100,v/Math.max(1,mx)*100))+"%";$("c"+k+"b").className="bar"+(v/Math.max(1,mx)<w?" w":"")};
  if(sn.h!=null){set("h",sn.h,sn.hm,.3);set("f",sn.f,100,.25);set("p",sn.p,sn.pm,.3)}
- $("crl").textContent=mm.role?`${(ROLE_TXT[mm.role]||[])[1]||""} ${mm.role}`:"미정";$("crk").textContent=mm.rank;
+ $("cnm").textContent=mm.cname||"";$("crl").textContent=mm.role?`${(ROLE_TXT[mm.role]||[])[1]||""} ${mm.role}`:"미정";$("crk").textContent=mm.rank;
  set("c",mm.cond,100,.25);$("cpu").textContent=mm.purse+" G";$("cdl").textContent=mm.dayLeft+" G";
  $("chd").textContent=sh?Math.round(sh.hd)+"°":"—";$("ckn").textContent=sn.sail?(sn.kn||0)+" 노트":"—";
  $("cwd").textContent=sn.wind!=null?D8[Math.round(((sn.wind+180)%360)/45)%8]+"풍 · "+(sn.ws<.85?"약함":sn.ws<1.2?"보통":"강함"):"—";
  $("cds").textContent=sn.dst!=null?sn.dst+" 해리":"—";
- $("smn").textContent=`${sh?sh.ship:"배"} · ${mm.rank}`;$("smg").textContent=mm.purse+" G";
+ $("smn").textContent=`${sh?sh.ship:"배"} · ${mm.cname||mm.rank}`;$("smg").textContent=mm.purse+" G";
  const sb=(k,v,mx,w)=>{$(k).firstElementChild.style.width=Math.min(100,Math.max(0,v/Math.max(1,mx)*100))+"%";$(k).className="bar"+(v/Math.max(1,mx)<w?" w":"")};
  if(sn.h!=null)sb("smub",sn.h,sn.hm,.3);sb("smcb",mm.cond,100,.25)}
 
@@ -280,6 +289,7 @@ function mapSvg(sh,sn){
  s+=`</g><g transform="translate(${VW/2},${VH/2}) rotate(${sh.hd}) scale(${[1.3,1.1,.95,.85][sh.lv||0]})">${shipG(sh.lv||0)}</g>`;
  if(sn.wind!=null)s+=`<g transform="translate(${VW-28},${VH-40}) rotate(${sn.wind})" stroke="var(--sub)" fill="none"><line y1="14" y2="-14"/><path d="M-4,-8 L0,-14 L4,-8"/></g><text x="${VW-28}" y="${VH-12}" font-size="8" text-anchor="middle" fill="var(--sub)">바람</text>`;
  s+=`<g transform="translate(34,36)" fill="none" stroke="var(--sub)"><circle r="17"/><circle r="13" stroke-dasharray="1 3"/><path d="M0,-15 L3,-3 L15,0 L3,3 L0,15 L-3,3 L-15,0 L-3,-3Z" fill="var(--hi)"/><path d="M0,-15 L3,-3 L-3,-3Z" fill="var(--warn)" stroke="none"/><text y="-21" font-size="9" text-anchor="middle" fill="var(--warn)" stroke="none">N</text></g>`;
+ s+=`<rect width="${VW}" height="${VH}" fill="#0a1530" opacity="${(nightAmt(sn.hr)*.5).toFixed(2)}" style="pointer-events:none"/>`;
  return s}
 const cb=(label,fn,dis,pri,attr)=>`<button class="${pri?"pri":""}" ${attr||""} onclick="${fn}" ${dis?"disabled":""}>${label}</button>`;
 const gp=(t,b,h)=>`<div class="grp"><div class="gt">${t}</div>${b}${h?`<div class="sub sm" style="margin-top:2px">${h}</div>`:""}</div>`;
@@ -319,7 +329,8 @@ O.duty=k=>act(async()=>{const r=await O.api("/crew/duty",{duty:k});
 O.support=k=>act(async()=>{const r=await O.api("/crew/support",{kind:k});note(`${SUPNAME[k]}${r.bonus?" (직책의 솜씨!)":""} — 선장에게 닿았다.`)});
 O.advise=i=>act(async()=>{await O.api("/crew/advise",{opt:i});note("선장에게 귓속말을 건넸다.")});
 O.rest=()=>act(async()=>{const r=await O.api("/crew/rest",{});note(r.msg);diary(r.msg)});
-O.role=r=>{if(!confirm(`「${r}」(으)로 시작할까요? 탑승 중에는 직책을 바꿀 수 없습니다.`))return;act(async()=>{await O.api("/crew/role",{role:r});note(`직책을 「${r}」(으)로 정하고 일을 시작했다.`)})};
+O.role=r=>{const name=cleanName(($("cname")||{}).value||"").trim(),raw=(($("cname")||{}).value||"").trim();if(!raw){alert("선원 캐릭터의 이름을 먼저 정해 주세요.");return}
+ if(!confirm(`「${name}」, 직책 「${r}」(으)로 시작할까요? 탑승 중에는 직책을 바꿀 수 없습니다.`))return;act(async()=>{await O.api("/crew/role",{role:r,name:raw});note(`${name}(으)로서 「${r}」 직책을 맡아 일을 시작했다.`)})};
 O.crewDeliveries=async list=>{
  const mine=(list||[]).filter(d=>d.kind==="coop_note");if(!mine.length)return;
  const got=(await O.api("/claim",{ids:mine.map(d=>d.id)})).deliveries;
@@ -356,7 +367,7 @@ function cabin(){
  const talk=[["식사 시간입니다, 선장님. 든든히 드셔야 합니다!","🍲 식사하시죠"],["다들 지쳤습니다. 닻을 내리고 잠시 쉬어 가면 어떨까요?","😴 쉬어 가요"],["뭔가 불길한 기운이 느껴집니다. 조심하세요, 선장님!","⚠ 불길해요"],["항해가 순조롭습니다, 선장님!","👍 순조로워요"],...(seen.length?[[`근처 ${pick(seen)}에 들러 보면 어떨까요?`,"🏝 섬에 들러요"]]:[])];
  $("v-cabin").innerHTML=VHD(IC.cab,"선원실","선원들이 쉬고 짐을 두는 방 — 해먹과 사물함, 그리고 내 일지")+
  ` <div class="two"><div><h2>직책</h2><div class="row seat"><span>${(ROLE_TXT[mm.role]||[])[1]||""} <b>${esc(mm.role)}</b><br><span class="sub sm">${esc((ROLE_TXT[mm.role]||[])[2]||"")}</span></span></div><div class="sub sm">직책은 탑승하기 전에 정한다. 바꾸려면 배에서 내렸다가 다시 탑승해야 한다.</div>
- <h2>동료</h2>${m.shipmates.map(x=>`<div class="row"><span>${esc(x.name)}${x.name===O.user.username?" (나)":""}</span><span class="sub sm">${esc(x.role||"직책 미정")}</span></div>`).join("")||"<div class='sub sm'>없음</div>"}
+ <h2>동료</h2>${m.shipmates.map(x=>`<div class="row"><span>${esc(x.cname||x.name)}${x.name===O.user.username?" (나)":""}</span><span class="sub sm">${esc(x.role||"직책 미정")}</span></div>`).join("")||"<div class='sub sm'>없음</div>"}
  <h2>선장에게 한마디</h2><div class="sub sm" style="margin-bottom:4px">선원 채팅에 대신 말해 준다.</div>${talk.map(([t,l])=>`<button onclick="Online.crewSay(${JSON.stringify(t).replace(/"/g,"&quot;")})">${l}</button>`).join("")}</div>
  <div><h2>컨디션</h2>${bar(mm.cond,100,.25)}<div class="row"><span class="sm">${mm.cond} / 100 (30초에 1 회복)</span><button data-rest="1" data-l="해먹에서 쉬기" onclick="Online.rest()">해먹에서 쉬기</button></div>
  <h2>계급과 월급</h2><div class="row"><span>${esc(mm.rank)}</span><span class="sm">일한 횟수 ${mm.tasks||0} · 경험 ${mm.xp}${next?` / ${next}`:" (최고 계급)"}</span></div>${bar(mm.xp-RXP[ri],(next||RXP[ri]+1)-RXP[ri],0)}<div class="sub sm">계급이 오르면 쿨다운이 줄고 월급이 늘며, 전투에서 더 강한 아군이 된다. 월급은 내 항해를 시작하면 '바다 위의 사람들'에서 찾는다.</div>

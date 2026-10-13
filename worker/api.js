@@ -118,7 +118,14 @@ const DAILY_CAP = 200;
 const COND_COST = 12, COND_REGEN = 30_000;       // 컨디션 100 만점, 30초에 1 회복
 const dayKey = () => new Date().toISOString().slice(0, 10);
 const condNow = (p, t) => Math.min(100, (p.cond == null ? 100 : p.cond) + Math.floor((t - (p.cond_at || 0)) / COND_REGEN));
-const fill = (tpl, v) => tpl.replace(/\{(\w+)\}/g, (_, k) => (v[k] == null ? "" : v[k]));
+const charName = (p, u) => (p && p.cname) || u.username;   // 캐릭터 이름이 없으면 아이디
+// 받침에 따라 이/가, 은/는, 을/를, 과/와 를 맞춘다 (한글이 아니면 받침 없음으로 본다)
+const hasBatchim = (w) => { const ch = String(w).trim().slice(-1), c = ch.charCodeAt(0); if (/[0-9]/.test(ch)) return "013678".includes(ch); return c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 !== 0; };   // 숫자는 읽는 소리 기준 (영·일·삼·육·칠·팔은 받침 있음)
+const JOSA = { "이(가)": ["이", "가"], "은(는)": ["은", "는"], "을(를)": ["을", "를"], "과(와)": ["과", "와"] };
+const josa = (w, m) => JOSA[m][hasBatchim(w) ? 0 : 1];
+const fill = (tpl, v) => tpl
+  .replace(/\{(\w+)\}(이\(가\)|은\(는\)|을\(를\)|과\(와\))/g, (_, k, m) => (v[k] == null ? "" : v[k] + josa(v[k], m)))
+  .replace(/\{(\w+)\}/g, (_, k) => (v[k] == null ? "" : v[k]));
 const listItems = (items) => Object.entries(items).map(([k, v]) => `${k} ${v}`).join(", ");
 
 // 같은 일도 매번 다른 문장으로: M = 선원 본인에게 보이는 말, C = 선장 항해일지에 남는 말
@@ -196,8 +203,9 @@ async function doDuty(env, u, duty) {
   const cap = await first(env, "SELECT loc FROM presence WHERE user_id=?", c.captain_id);
   const coast = cap && cap.loc === "port";
   const bonus = p.role === d.role, mult = bonus ? 1.5 : 1;
-  const work = { by: u.username, duty: d.name, role: bonus ? d.role : "" };
-  let mine = null, vars = { by: u.username }, items = null;
+  const nm = charName(p, u);
+  const work = { by: nm, duty: d.name, role: bonus ? d.role : "" };
+  let mine = null, vars = { by: nm }, items = null;
   if (duty === "fish") {
     const n = rint(1, 3) + (bonus && Math.random() < 0.4 ? 1 : 0);
     items = {};
@@ -258,7 +266,7 @@ async function doSupport(env, u, kind) {
     : (bonus ? 2 : 1);     // guard / distract: 지속 턴 수
   await env.DB.batch([
     P(env, "UPDATE crew_profile SET xp=xp+1, tasks=tasks+1, cond=?, cond_at=? WHERE user_id=?", left, t, u.id),
-    dlv(env, c.captain_id, "crew_support", { kind, power, by: u.username, role: p.role || "", bonus }),
+    dlv(env, c.captain_id, "crew_support", { kind, power, by: charName(p, u), role: p.role || "", bonus }),
   ]);
   return { ok: true, cond: left, power, bonus, ready: t + sp.cd };
 }
@@ -343,7 +351,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT id,kind,payload,created FROM deliveries WHERE user_id=? AND claimed IS NULL ORDER BY id LIMIT 40", user.id),
     P(env, "SELECT t.*,u.username fromName FROM trades t JOIN users u ON u.id=t.from_id WHERE t.to_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
     P(env, "SELECT t.*,u.username toName FROM trades t JOIN users u ON u.id=t.to_id WHERE t.from_id=? AND t.status='open' AND t.expires>? ORDER BY t.id DESC LIMIT 10", user.id, t),
-    P(env, "SELECT c.member_id id,u.username,cp.seen,cp.role,cp.xp FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", user.id),
+    P(env, "SELECT c.member_id id,u.username,cp.seen,cp.role,cp.xp,cp.cname FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", user.id),
     P(env, "SELECT i.id,i.captain_id,u.username captainName,i.created FROM crew_invites i JOIN users u ON u.id=i.captain_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
@@ -373,27 +381,27 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   if (crewRow) stm2.push(
     P(env, "SELECT username FROM users WHERE id=?", crewRow.captain_id),
     P(env, "SELECT * FROM presence WHERE user_id=?", crewRow.captain_id),
-    P(env, "SELECT u.username,cp.role FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
+    P(env, "SELECT u.username,cp.role,cp.cname FROM crew c JOIN users u ON u.id=c.member_id LEFT JOIN crew_profile cp ON cp.user_id=c.member_id WHERE c.captain_id=?", crewRow.captain_id),
     P(env, "SELECT duty,ready FROM crew_cd WHERE member_id=?", user.id));
   const r2 = (await env.DB.batch(stm2)).map((x) => x.results || []);
   const chat = {};
   chans.forEach((ch, i) => { chat[ch] = r2[i]; });
 
   const crew = { captainOf: [], memberOf: null, invitesIn: invInR, invitesOut: invOutR, me: null };
-  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0 }));
+  crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.cname || r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0 }));
   let cd = {};
   if (crewRow) {
     const k = chans.length, cp = r2[k + 1][0];
     cd = Object.fromEntries(r2[k + 3].map((r) => [r.duty, r.ready]));
     crew.memberOf = {
       captainId: crewRow.captain_id, captain: r2[k][0] && r2[k][0].username,
-      shipmates: r2[k + 2].map((r) => ({ name: r.username, role: r.role || "" })),
+      shipmates: r2[k + 2].map((r) => ({ name: r.username, cname: r.cname || "", role: r.role || "" })),
       ship: cp ? { name: cp.name, ship: cp.ship, lv: cp.lv, x: cp.x, y: cp.y, hd: cp.hd, loc: cp.loc, isl: cp.isl, online: t - cp.updated < FRESH * 2, snap: json(cp.snap), at: cp.updated } : null,
     };
   }
   if (p || crewRow) {
     const pp = p || { purse: 0, xp: 0, tasks: 0, day: "", day_earn: 0, role: "", cond: 100, cond_at: 0 };
-    crew.me = { purse: pp.purse, xp: pp.xp, tasks: pp.tasks, rank: rankOf(pp.xp), role: pp.role || "", cond: condNow(pp, t), cd, dayLeft: DAILY_CAP - (pp.day === dayKey() ? pp.day_earn : 0) };
+    crew.me = { purse: pp.purse, xp: pp.xp, tasks: pp.tasks, rank: rankOf(pp.xp), role: pp.role || "", cname: pp.cname || "", cond: condNow(pp, t), cd, dayLeft: DAILY_CAP - (pp.day === dayKey() ? pp.day_earn : 0) };
   }
 
   return {
@@ -537,8 +545,14 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
     const row = await first(env, "SELECT captain_id FROM crew WHERE member_id=?", user.id);
     if (!(cid === user.id || (row && row.captain_id === cid))) throw new HttpError(403, "그 배의 채팅에 참여할 수 없습니다.");
   }
-  const p = await first(env, "SELECT name FROM presence WHERE user_id=?", user.id);
-  await run(env, "INSERT INTO chat(channel,user_id,name,text,ts) VALUES(?,?,?,?,?)", ch, user.id, p ? p.name : user.username, text, now());
+  const p = await first(env, "SELECT name,updated FROM presence WHERE user_id=?", user.id);
+  let nm = p ? p.name : user.username;
+  // 선원 화면에서 말할 때(배 위치 신호가 없을 때)는 선원 캐릭터 이름으로
+  if (!p || now() - p.updated > 120_000 || ch !== "world") {
+    const cp = await first(env, "SELECT cname FROM crew_profile WHERE user_id=?", user.id);
+    if (cp && cp.cname && (await crewRowOf(env, user.id))) nm = cp.cname;
+  }
+  await run(env, "INSERT INTO chat(channel,user_id,name,text,ts) VALUES(?,?,?,?,?)", ch, user.id, nm, text, now());
   return { ok: true };
 });
 
@@ -594,11 +608,13 @@ route("POST", "/api/crew/support", async ({ env, user, body }) => {
 route("POST", "/api/crew/role", async ({ env, user, body }) => {
   const role = String(body.role || "");
   if (!ROLES.includes(role)) throw bad("알 수 없는 직책입니다.");
+  const cname = cleanName(body.name);
+  if (!String(body.name || "").trim()) throw bad("선원 캐릭터의 이름을 정해 주세요.");
   if (!(await crewRowOf(env, user.id))) throw bad("탑승한 배가 없습니다.");
   const p = await profile(env, user.id);
   if (p.role) throw bad("승선 중에는 직책을 바꿀 수 없습니다. 배에서 내렸다가 다시 탑승하면 정할 수 있습니다.");
-  await run(env, "UPDATE crew_profile SET role=? WHERE user_id=?", role, user.id);
-  return { ok: true, role };
+  await run(env, "UPDATE crew_profile SET role=?, cname=? WHERE user_id=?", role, cname, user.id);
+  return { ok: true, role, cname };
 });
 route("POST", "/api/crew/rest", async ({ env, user }) => {
   const t = now(), p = await profile(env, user.id), cur = condNow(p, t);
@@ -618,7 +634,7 @@ route("POST", "/api/crew/advise", async ({ env, user, body }) => {
   const snap = cap ? json(cap.snap) : {};
   if (!cap || now() - cap.updated > 45_000 || !snap.sc || !Array.isArray(snap.sc.o) || opt < 0 || opt >= snap.sc.o.length) throw bad("그 장면은 이미 지나갔습니다.");
   const p = await profile(env, user.id);
-  await dlv(env, c.captain_id, "crew_advice", { opt, by: user.username, role: p.role || "" }).run();
+  await dlv(env, c.captain_id, "crew_advice", { opt, by: charName(p, user), role: p.role || "" }).run();
   return { ok: true };
 });
 // 선장이 "함께한 보람"을 선원에게 나눈다. 이 선장의 선원에게만, 분당 한 번까지.
@@ -650,8 +666,9 @@ route("POST", "/api/crew/serve", async ({ env, user, body }) => {
   const t = now();
   if ((await first(env, "SELECT COUNT(*) n FROM deliveries WHERE user_id=? AND claimed IS NULL AND kind='crew_work'", c.captain_id)).n >= 15) throw bad("선장이 한동안 자리를 비워 일이 쌓여 있습니다.");
   if (!(await takeCooldown(env, user.id, "serve", 45_000, t))) throw bad("방금 올렸습니다. 잠시 후에 다시.");
-  await dlv(env, c.captain_id, "crew_work", { by: user.username, duty: "배식", items: { [item]: 1 },
-    text: rpick([`선원 ${user.username}이(가) 직접 만든 ${item}을(를) 쟁반에 받쳐 들고 왔다.`, `${user.username}이(가) 김이 오르는 ${item}을(를) 선장 앞에 내려놓았다. \"드셔 보세요!\"`, `선실 한쪽에 ${user.username}이(가) 만든 ${item}이(가) 놓여 있다. 정성이 느껴진다.`]) }).run();
+  const sp = await profile(env, user.id), who = charName(sp, user);
+  await dlv(env, c.captain_id, "crew_work", { by: who, duty: "배식", items: { [item]: 1 },
+    text: rpick([`선원 ${who}${josa(who, "이(가)")} 직접 만든 ${item}${josa(item, "을(를)")} 쟁반에 받쳐 들고 왔다.`, `${who}${josa(who, "이(가)")} 김이 오르는 ${item}${josa(item, "을(를)")} 선장 앞에 내려놓았다. \"드셔 보세요!\"`, `선실 한쪽에 ${who}${josa(who, "이(가)")} 만든 ${item}${josa(item, "이(가)")} 놓여 있다. 정성이 느껴진다.`]) }).run();
   return { ok: true };
 });
 // 선원이 자기 몫의 음식을 먹고 컨디션을 회복한다 (회복량은 허기 회복량의 절반, 최대 20)

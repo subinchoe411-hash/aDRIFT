@@ -12,7 +12,7 @@
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#15191c;--ink:#e6eaed;--sub:#8c98a1;--line:#2d353b;--acc:#7fb2cf;--warn:#d98676;--land:#1f2529;--sh:#1a2227;--hi:#2a3338}}
 :root[data-theme="dark"]{--bg:#15191c;--ink:#e6eaed;--sub:#8c98a1;--line:#2d353b;--acc:#7fb2cf;--warn:#d98676;--land:#1f2529;--sh:#1a2227;--hi:#2a3338}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Serif KR","Nanum Myeongjo",Georgia,serif;line-height:1.6;font-size:14px}
+body{transition:background .8s,color .8s;margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Serif KR","Nanum Myeongjo",Georgia,serif;line-height:1.6;font-size:14px}
 .scr{max-width:780px;margin:0 auto;padding:56px 24px}.c{text-align:center;padding-top:140px}
 h1{font-size:26px;letter-spacing:.2em;font-weight:600;margin:0 0 8px}
 h2{font-size:11px;color:var(--sub);letter-spacing:.14em;margin:16px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--line);font-weight:600}
@@ -248,6 +248,9 @@ function hasRole(r){const q=RQ[r];if(!q)return false;if(window.Online&&Online.cr
 const roleLbl=r=>{const q=RQ[r];return q[1]?"요리 Lv3":q[0]+" 5"}
 function pendHTML(){return S.pend?`<div>${S.pend.t}</div>`+S.pend.o.map((o,i)=>`<button onclick="pp(${i})" ${o[2]?"disabled":""}>${o[0]}${window.Online&&Online.advMark?Online.advMark(i):""}</button>`).join(""):""}
 const nm=x=>x.replace(/\{n\}/g,S.qn||"수배자");
+/* 밤의 정도 0(낮)~1(깊은 밤). 7~18시 낮, 18~21시 저녁, 21~5시 밤, 5~7시 새벽 */
+function nightAmt(h){h=((h==null?S.t%1440/60:h)%24+24)%24;if(h>=7&&h<18)return 0;if(h>=18&&h<21)return(h-18)/3;if(h>=21||h<5)return 1;return 1-(h-5)/2}
+function applyTod(h){const n=nightAmt(h)>.5;if(window._nt!==n){window._nt=n;if(n)document.documentElement.setAttribute("data-theme","dark");else document.documentElement.removeAttribute("data-theme")}}
 function sc(id){if(!SC[id])return;const s=SC[id],g=S.gh;S.scId=id;
  const hd=(s.gh&&g?` [단서 ${g.c} · 공포 ${g.e}]`:"")+(s.dv&&S.inC?` [남은 산소 ${Math.max(0,S.air)}]`:"");
  say("— "+nm(s.t)+hd);
@@ -490,7 +493,7 @@ function addEf(id,min){const d=EFX[id];if(!d)return;if(!d.g)min=Math.max(30,Math
 function efTick(dt){let rg=0;S.ef=S.ef.filter(e=>{if(S.t>=e.until){say("효과가 사라졌다: "+e.id);return false}rg+=(EFX[e.id]||{r:0}).r;return true});if(rg)S.hp=Math.min(hpm(),S.hp+rg*dt)}
 function efHTML(){return S.ef.map(e=>{const d=EFX[e.id];if(!d)return"";const m=Math.max(1,Math.round(e.until-S.t));return `<span class="chip ${d.g?"g":"b"}" title="${d.d}">${e.id} ${m>=60?Math.round(m/60)+"시간":m+"분"}</span>`}).join("")}
 /* ================= 턴제 전투 (아군 목록 b.al 에 선원이 함께 선다) ================= */
-const MON={serpent:{n:"바다뱀",en:[["바다뱀",110,13,2,"bite"]],win:"g:140;a;m:1",lose:"h:12",xp:8},crab:{n:"거대 집게게",en:[["거대 집게게",95,10,5,""]],win:"g:70;i:게:3;i:조개:2",lose:"h:8",xp:7},ghostp:{n:"유령 해적단",en:[["유령 선장",85,12,3,"boss"],["유령 선원",35,7,1,""],["유령 선원",35,7,1,""]],win:"g:160;a;m:2",lose:"g:-30;h:10",xp:11},shark:{n:"거대 상어",en:[["거대 상어",70,12,2,"bite"]],win:"g:60;i:상어 고기:2",lose:"h:6",xp:6},jelly:{n:"해파리 떼",en:[["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"]],win:"g:30",lose:"",xp:5},siren:{n:"세이렌",en:[["세이렌",80,9,1,"siren"]],win:"g:150;i:세이렌의 비늘:1;m:1",lose:"",xp:9},kraken:{n:"크라켄",en:[["크라켄",150,14,3,"kraken"],["촉수",40,8,0,"tent"],["촉수",40,8,0,"tent"]],win:"g:300;i:크라켄의 촉수:2;a;m:3",lose:"h:25",xp:16},pirates:{n:"해적선 습격",en:[["해적 두목",60,10,2,"boss"],["해적",32,6,1,""],["해적",32,6,1,""]],win:"g:90;m:3;i:커틀러스:1",lose:"g:-25;h:8",xp:10},outlaw:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"k:1;m:2",lose:"z:1",xp:10},outlawI:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"w:1;m:4",lose:"",xp:10}};
+const MON={serpent:{n:"바다뱀",en:[["바다뱀",110,13,2,"bite"]],win:"g:140;a;m:1",lose:"h:12",xp:8},crab:{n:"거대 집게게",en:[["거대 집게게",95,10,5,""]],win:"g:70;i:게:3;i:조개:2",lose:"h:8",xp:7},ghostp:{n:"유령 해적단",en:[["유령 선장",85,12,3,"boss"],["유령 선원",35,7,1,""],["유령 선원",35,7,1,""]],win:"g:160;a;m:2",lose:"h:10",xp:11},shark:{n:"거대 상어",en:[["거대 상어",70,12,2,"bite"]],win:"g:60;i:상어 고기:2",lose:"h:6",xp:6},jelly:{n:"해파리 떼",en:[["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"],["해파리",25,5,0,"jelly"]],win:"g:30",lose:"",xp:5},siren:{n:"세이렌",en:[["세이렌",80,9,1,"siren"]],win:"g:150;i:세이렌의 비늘:1;m:1",lose:"",xp:9},kraken:{n:"크라켄",en:[["크라켄",150,14,3,"kraken"],["촉수",40,8,0,"tent"],["촉수",40,8,0,"tent"]],win:"g:300;i:크라켄의 촉수:2;a;m:3",lose:"h:25",xp:16},pirates:{n:"해적선 습격",en:[["해적 두목",60,10,2,"boss"],["해적",32,6,1,""],["해적",32,6,1,""]],win:"g:90;m:3;i:커틀러스:1",lose:"h:8",xp:10},outlaw:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"k:1;m:2",lose:"z:1",xp:10},outlawI:{n:"수배자 {n}",en:[["{n}",75,10,2,"boss"],["부하",32,6,1,""],["부하",32,6,1,""]],win:"w:1;m:4",lose:"",xp:10}};
 function startBattle(key){const m=MON[key];if(!m||S.bt||S.over)return;const nm=x=>x.replace(/\{n\}/g,S.qn||"수배자"),seed=Math.floor(rnd()*1e9);
  const en=m.en.map(([n,hp,atk,def,sk])=>({n:nm(n),hp:Math.round(hp*thr()),mhp:Math.round(hp*thr()),atk:Math.round(atk*thr()*10)/10,def,sk,st:{}})),al=[{n:"나",me:1,st:{}}];
  S.bt={key,t:nm(m.n),seed,r:rng(seed),acts:[],en,al,tg:0,rd:1,log:[nm(m.n)+"과(와)의 전투가 시작됐다!"],win:m.win,lose:m.lose,xp:m.xp,def:false,cd:{smash:0,aid:0},done:0};
@@ -522,7 +525,7 @@ if(b.en.every(x=>x.hp<=0))return bEnd("win");
 function bEnd(kind){const b=S.bt;b.done=1;const t=b.t;
  if(kind==="win"){addXp("fight",b.xp);ct("win");say(`전투 승리! ${t}을(를) 물리쳤다. (전투 경험 +${b.xp})`);const r=fx(b.win);if(r)say("전리품 "+r);S.bt=null;flush()}
  else if(kind==="flee"){say(t+"에게서 도망쳤다.");if(/z:/.test(b.lose))fx(b.lose);S.bt=null}
- else{const l=Math.round(S.gold*.2);S.gold-=l;S.hp=Math.max(1,Math.round(hpm()*.3));addEf("부상",600);say(`전투에서 패배했다. 정신을 잃었다가 깨어나 보니 골드 ${l}을 잃었다.`);const r=fx(b.lose||"");if(r)say(r);S.bt=null}
+ else{S.hp=Math.max(1,Math.round(hpm()*.3));S.t+=240;addEf("부상",600);say("전투에서 패배했다. 정신을 잃었다가 눈을 떠 보니 4시간이 지나 있었다. 다행히 잃은 물건은 없다.");const r=fx(b.lose||"");if(r)say(r);S.bt=null}
  renderAll()}
 function rBattle(){const e=$("btl"),b=S.bt;if(!b){e.className="";e.innerHTML="";return}e.className="card pend";
  const bar=(v,m)=>`<div class="bar${v/m<.3?" w":""}"><i style="width:${Math.max(0,v/m*100)}%"></i></div>`;
@@ -805,7 +808,7 @@ function event(){if(S.dk>=0||S.isl!==null||S.inC||S.pend)return;const h=Math.flo
  else if(r<28+L){const it=pick(["목재","럼","달걀"]);say("표류물을 건졌다. "+fx(`i:${it}:1`))}
  else if(r<36)say(pick(["멀리서 고래가 숨을 뿜는다.","돌고래 떼가 뱃머리를 따라온다.","갈매기 한 마리가 마스트에 앉았다 간다.","물빛이 갑자기 짙은 청록으로 변한다."]))}
 function tick(dt){S.t+=dt;S.hun=Math.max(0,S.hun-dt/6*(1+M("hun"))*dfx().hun);if(S.auto.on&&S.hun<=S.auto.th)autoLoop();if(S.hun<=0)S.hp-=dt/15;else if(S.hun>40)S.hp=Math.min(hpm(),S.hp+dt/45);efTick(dt);S.ct.gold=Math.max(S.ct.gold||0,S.gold);chkT();chkGoals();
- if(S.hp<=0){if(S.hun<=0)return endGame("굶주림 끝에 쓰러졌다","허기와 체력이 모두 바닥났다. 바다 한가운데서 선장은 더 이상 일어나지 못했다.");S.hp=hpm()*.4;S.hun=Math.max(S.hun,30);S.t+=480;const l=Math.round(S.gold*.2);S.gold-=l;ct("faint");say("정신을 잃었다가 8시간 뒤 깨어났다. 골드 "+l+"을 잃었다.");if(S.inC){S.inC=null;S.cur=null;S.pend=null;S.act=null;S.view="deck"}renderAll()}S.wind=(S.wind+(rnd()-.5)*dt*.5+360)%360;S.ws=Math.min(1.7,Math.max(.4,S.ws+(rnd()-.5)*dt*.012));
+ if(S.hp<=0){const st=S.hun<=0;S.hp=hpm()*.4;S.hun=Math.max(S.hun,st?35:30);S.t+=480;ct("faint");say(st?"허기와 체력이 모두 바닥나 쓰러졌다. 지나가던 어선이 구해 주먹밥을 나눠 주었고, 8시간 뒤에야 눈을 떴다.":"정신을 잃었다가 8시간 뒤 깨어났다.");if(S.inC){S.inC=null;S.cur=null;S.pend=null;S.act=null;S.view="deck"}renderAll()}S.wind=(S.wind+(rnd()-.5)*dt*.5+360)%360;S.ws=Math.min(1.7,Math.max(.4,S.ws+(rnd()-.5)*dt*.012));
  if(S.sail&&S.man){const rf=inReef(S.x,S.y),cb=curBoost(),st=kn()/60*dt*(rf?(S.sl===1?.55:.7):1),a=rad(S.hd),nx=S.x+Math.sin(a)*st,ny=S.y-Math.cos(a)*st;if(landAt(nx,ny)){S.sail=false;S.hull-=6;say("얕은 곳에 부딪혔다! 선체가 상했다. 닻을 내렸다.");renderAll()}else{S.x=nx;S.y=ny;ct("nm",st);ct("mnm",st);if(cb>0)ct("cur",st);if(rf&&S.sl>1){S.hull-=dt*.35;if(S.t-S.sm>45){S.sm=S.t;say("암초에 선체가 긁힌다! 돛을 접고 천천히 지나자.")}}}}
  else if(S.sail&&S.path.length){let rem=kn()/60*dt;while(rem>0&&S.path.length){const[w,z]=S.path[0],dx=w-S.x,dy=z-S.y,d=Math.hypot(dx,dy);S.hd=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;
   if(d<=rem){S.x=w;S.y=z;rem-=d;ct("nm",d);S.path.shift()}else{S.x+=dx/d*rem;S.y+=dy/d*rem;ct("nm",rem);rem=0}}
@@ -813,15 +816,15 @@ function tick(dt){S.t+=dt;S.hun=Math.max(0,S.hun-dt/6*(1+M("hun"))*dfx().hun);if
  normS();
  discover();
  if(S.man&&S.sail&&S.sl>idealSail()&&S.ws>1.3){S.hull-=dt*.12;if(S.t-S.sm>45){S.sm=S.t;say("강풍에 돛이 비명을 지른다! 돛을 줄이자.")}}
- const v=vis();I.forEach((w,i)=>{if(!S.seen.has(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);say("수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");renderAll()}});
+ const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
  const dk=S.sail?-1:I.findIndex(w=>TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
  if(S.act){S.act.l-=dt;if(S.act.l<=0){const f=S.act.fn;S.act=null;f();renderAll()}}
  S.acc+=dt;while(S.acc>=60){S.acc-=60;event()}S.acc2+=dt;while(S.acc2>=10){S.acc2-=10;small()}
  S.out.forEach(b=>{if(!b.r&&S.t>=b.due+(b.srv?4320:0)&&S.isl===null&&!S.inC){b.r=1;const rp=pick(REPLY),r=fx(rp[2]);S.mail.unshift({from:rp[0],text:rp[1],t:clock(),re:b.text});S.mail.length=Math.min(S.mail.length,40);say("누군가 당신의 병 편지를 주웠다! 답장이 파도에 실려 왔다.");say("✉ "+rp[0]+": “"+rp[1]+"” "+r);renderAll()}})
- if(S.hull<=0)endGame("배가 가라앉았다","거센 파도 속에서 배는 끝내 버티지 못했다.")}
+ if(S.hull<=0){S.hull=Math.round(hm()*.4);S.sail=false;S.man=false;S.tx=null;S.path=[];S.act=null;S.pend=null;S.bt=null;S.inC=null;S.cur=null;S.isl=null;S.view="deck";S.x=I[0].dx;S.y=I[0].dy;S.dk=0;S.t+=360;ct("rescued");say("선체가 부서지기 직전, 지나던 어선단이 배를 예인해 첫걸음 섬 부두로 데려다 주었다. 선체는 40%만 고쳐져 있다. (6시간이 지났다)");renderAll()}}
 function endGame(t,m){try{localStorage.removeItem(SAVE_KEY())}catch(e){}S.over=true;S.act=null;S.pend=null;S.inC=null;S.bt=null;const d=$("dead");d.hidden=false;d.innerHTML=`<svg viewBox="0 0 48 48" style="width:56px;border:0;cursor:default;fill:none;stroke:var(--sub);stroke-width:1.5;margin-bottom:10px"><path d="M24 6v28M14 14h20M10 34c0 6 6 8 14 8s14-2 14-8M10 34l6-4M38 34l-6-4"/></svg><h1 style="font-size:22px">${t}</h1><p class="sub" style="max-width:420px">${m}</p><p class="sm sub">${Math.floor(S.t/1440)+1}일째 · 방문한 섬 ${I.filter(w=>w.v).length}곳 · 최종 골드 ${S.gold}G · 칭호 ${S.tt.size}개</p><button onclick="location.reload()" style="padding:8px 22px">새 항해를 시작한다</button>`;say(t);renderAll()}
 function live(){const h=Math.max(0,S.hull);
- $("sn").textContent=C.name;$("stt").textContent="「"+S.title+"」";$("hn").textContent=S.hon;$("inf").textContent=S.inf;$("wt").textContent=wanted()?wanted()+" G":"—";$("sclk").textContent=clock();$("swh").textContent=S.inC?S.inC.n+" 잠수 중":S.isl!==null?I[S.isl].n+" 상륙 중":S.dk>=0?I[S.dk].n+" 정박":S.sail?"항해 중":"표류 중";
+ $("sn").textContent=C.name;$("stt").textContent="「"+S.title+"」";$("hn").textContent=S.hon;$("inf").textContent=S.inf;$("wt").textContent=wanted()?wanted()+" G":"—";$("sclk").textContent=(nightAmt()>.5?"🌙 ":nightAmt()>0?"🌆 ":"☀ ")+clock();applyTod();$("swh").textContent=S.inC?S.inC.n+" 잠수 중":S.isl!==null?I[S.isl].n+" 상륙 중":S.dk>=0?I[S.dk].n+" 정박":S.sail?"항해 중":"표류 중";
  const bar=(k,v,mx,w)=>{$(k+"v").textContent=Math.round(v)+" / "+mx;$(k+"b").firstElementChild.style.width=Math.max(0,v/mx*100)+"%";$(k+"b").className="bar"+(v/mx<w?" w":"")};
  bar("h",S.hun,100,.25);bar("p",S.hp,hpm(),.3);bar("u",h,hm(),.3);$("gv").textContent=S.gold+" G";
  $("sfx").innerHTML=efHTML();$("smx").innerHTML=efHTML();$("smn").textContent=C.name+" · 「"+S.title+"」";$("smg").textContent=S.gold+" G";const sb=(k,v,mx,w)=>{$(k).firstElementChild.style.width=Math.min(100,Math.max(0,v/mx*100))+"%";$(k).className="bar"+(v/mx<w?" w":"")};sb("smhb",S.hun,100,.25);sb("smpb",S.hp,hpm(),.3);sb("smub",h,hm(),.3);
@@ -844,6 +847,7 @@ function live(){const h=Math.max(0,S.hull);
  s+=`<circle cx="${S.x*K}" cy="${S.y*K}" r="${vis()*K}" fill="none" stroke="var(--line)" stroke-dasharray="3 5"/>`;
  if(S.tx!==null)s+=`<polyline points="${[[S.x,S.y],...S.path].map(q=>(q[0]*K).toFixed(1)+","+(q[1]*K).toFixed(1)).join(" ")}" fill="none" stroke="var(--acc)" stroke-dasharray="4 4"/><circle cx="${S.tx*K}" cy="${S.ty*K}" r="4" fill="none" stroke="var(--acc)"/>`;
  s+=`</g><g transform="translate(${VW/2},${VH/2}) rotate(${S.hd}) scale(${[1.3,1.1,.95,.85][S.lv]})">${shipG(S.lv)}</g><g transform="translate(${VW-28},${VH-40}) rotate(${S.wind})" stroke="var(--sub)" fill="none"><line y1="14" y2="-14"/><path d="M-4,-8 L0,-14 L4,-8"/></g><text x="${VW-28}" y="${VH-12}" font-size="8" text-anchor="middle" fill="var(--sub)">바람</text><g transform="translate(34,36)" fill="none" stroke="var(--sub)"><circle r="17"/><circle r="13" stroke-dasharray="1 3"/><path d="M0,-15 L3,-3 L15,0 L3,3 L0,15 L-3,3 L-15,0 L-3,-3Z" fill="var(--hi)"/><path d="M0,-15 L3,-3 L-3,-3Z" fill="var(--warn)" stroke="none"/><text y="-21" font-size="9" text-anchor="middle" fill="var(--warn)" stroke="none">N</text></g>`;
+ s+=`<rect width="${VW}" height="${VH}" fill="#0a1530" opacity="${(nightAmt()*.5).toFixed(2)}" style="pointer-events:none"/>`;
  $("dy").innerHTML=s}
 /* ---- 화면 ---- */
 const bt=(t,f,d,pr)=>`<button class="${pr?"pri":""}" onclick="${f}" ${d?"disabled":""}>${t}</button>`;
