@@ -8,7 +8,7 @@ let tok="";try{tok=localStorage.getItem(TOK)||""}catch(e){}
 const ST=(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
 const gameOn=()=>typeof S!=="undefined"&&!!S&&!S.over&&!$("game").hidden;
 const srvNow=()=>Date.now()+O.off;
-const plain=h=>String(h).replace(/<[^>]*>/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim().slice(0,100);
+const plain=h=>String(h).replace(/<[^>]*>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/\s+/g," ").trim().slice(0,100);
 
 async function api(path,body,method){
   const r=await fetch("/api"+path,{method:method||(body===undefined?"GET":"POST"),headers:{"content-type":"application/json",...(tok?{authorization:"Bearer "+tok}:{})},body:body===undefined?undefined:JSON.stringify(body)});
@@ -67,6 +67,22 @@ function schedule(ms){clearTimeout(timer);if(!O.on)return;
   if(ms!==0&&Date.now()-lastInput>IDLE_MS){idle=true;let b=$("olidle");if(!b){b=document.createElement("div");b.id="olidle";b.style.cssText="position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:30;background:var(--bg);border:1px solid var(--line);padding:6px 14px;font-size:12px";b.textContent="자리 비움 — 화면을 누르면 온라인 연결을 다시 시작합니다.";document.body.appendChild(b)}b.hidden=false;return}
   timer=setTimeout(()=>sync(),ms==null?(document.hidden?30000:(O.crewMode?(O.hot&&O.hot()?2500:4500):gameOn()?(O.hot&&O.hot()?2500:5000):20000)):ms)}
 O.syncNow=()=>schedule(0);
+/* ===== 배 창고 동기화 =====
+   서버가 정본이다. 선장 화면은 '마지막으로 받은 창고(stoB)'와 지금 S.sto 의 차이만 올린다.
+   선원이 그사이 넣고 뺀 것은 서버 값 위에 선장의 변화를 얹어 합친다. 응답이 끊겨도 같은 seq 로 다시 보내 두 번 반영되지 않는다. */
+let stoB=null,stoInf=null,stoForce=false,stoSeq=Date.now();
+const sdiff=(a,b)=>{const d={};for(const k of new Set([...Object.keys(a),...Object.keys(b)])){const v=(a[k]||0)-(b[k]||0);if(v)d[k]=v}return d};
+const sapply=(o,d)=>{const r={...o};for(const k in d){const n=(r[k]||0)+d[k];if(n>0)r[k]=n;else delete r[k]}return r};
+O.stoReset=force=>{stoB=null;stoInf=null;stoForce=!!force};
+O.stoOut=()=>{if(!S||!S.sto)return undefined;const cap=capS();
+  if(!stoB)return{init:{...S.sto},reset:stoForce||undefined,seq:++stoSeq,cap};
+  if(!stoInf){const d=sdiff(S.sto,stoB);if(Object.keys(d).length)stoInf={seq:++stoSeq,d}}
+  return stoInf?{d:stoInf.d,seq:stoInf.seq,cap}:{cap}};
+O.stoIn=(r,sent)=>{const s=r.sto;if(!s||!S||!S.sto)return;const before=JSON.stringify(S.sto);
+  if(!stoB){S.sto=sapply({},s.items);stoForce=false}
+  else{const ap=!sent.d||s.seq>=sent.seq,extra=sdiff(S.sto,ap?sapply(stoB,sent.d||{}):stoB);S.sto=sapply(s.items,extra);if(stoInf){if(ap)stoInf=null;else{stoSeq=Math.max(stoSeq,s.seq);stoInf.seq=++stoSeq}}}
+  stoB={...s.items};
+  if(JSON.stringify(S.sto)!==before){renderAll();saveGame()}};
 function myState(){
   const loc=S.inC?"city":(S.isl!==null||S.dk>=0)?"port":"sea",isl=S.isl!==null?S.isl:S.dk;
   return {name:C.name,ship:SH[S.lv].n,lv:S.lv,x:S.x,y:S.y,hd:S.hd,loc,isl:loc==="port"?isl:-1,
@@ -76,11 +92,13 @@ async function sync(){
   if(!O.on||!tok||busy)return;busy=true;let ok=false;
   try{
     const active=gameOn();
-    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined});
+    const so=active?O.stoOut():undefined;
+    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined,sto:so});
     O.data=r;O.off=r.now-Date.now();ok=true;
+    if(active&&so)O.stoIn(r,so);
     for(const ch in r.chat){const a=r.chat[ch];if(a.length)since[ch]=a[a.length-1].id;chatAdd(ch,a)}
     if(active)await takeDeliveries(r.deliveries);else if(O.crewMode&&O.crewDeliveries)await O.crewDeliveries(r.deliveries);
-    noticeNearby(r);renderDock();O.renderCrew&&O.renderCrew();if(!active&&!O.crewMode&&!$("title").hidden)decorateTitle()
+    noticeNearby(r);renderDock();O.renderCrew&&O.renderCrew();O.renderCrewInfo&&O.renderCrewInfo();if(!active&&!O.crewMode&&!$("title").hidden)decorateTitle()
   }catch(e){}
   busy=false;schedule()}
 
@@ -104,14 +122,14 @@ function applyOne(d){
   const p=d.payload||{};
   try{
   switch(d.kind){
-  case "greet":say(`👋 <b>${esc(p.name)}</b>(${esc(p.ship)}): “${esc(p.text)}”`);break;
+  case "greet":say(`※ <b>${esc(p.name)}</b>(${esc(p.ship)}): “${esc(p.text)}”`);break;
   case "trade_done":{const paid=take(p.cost||{gold:0,items:{}});gain(p.gain||{gold:0,items:{}});
-    say(`🤝 ${esc(p.with)}와(과)의 거래가 성사되었다. 받은 것: ${fmtB(p.gain||{})}${(p.cost&&(p.cost.gold||Object.keys(p.cost.items||{}).length))?` / 건넨 것: ${fmtB(p.cost)}`:""}${paid?"":" (내놓을 것이 모자라 있는 만큼만 건넸다)"}`);break}
-  case "trade_refund":gain(p.gain||{});say(`🤝 ${esc(p.why||"거래가 취소되었다")}. 맡겨 둔 ${fmtB(p.gain||{})}이(가) 돌아왔다.`);break;
-  case "purse":S.gold+=Math.floor(+p.gold||0);say(`💰 선원 월급 ${Math.floor(+p.gold||0)}G를 찾았다.`);break;
-  case "bottle_found":{const b=S.out.find(x=>x.srv&&!x.r);if(b)b.r=1;say("🍾 누군가 당신의 병 편지를 주웠다!");break}
+    say(`※ ${esc(p.with)}와(과)의 거래가 성사되었다. 받은 것: ${fmtB(p.gain||{})}${(p.cost&&(p.cost.gold||Object.keys(p.cost.items||{}).length))?` / 건넨 것: ${fmtB(p.cost)}`:""}${paid?"":" (내놓을 것이 모자라 있는 만큼만 건넸다)"}`);break}
+  case "trade_refund":gain(p.gain||{});say(`※ ${esc(p.why||"거래가 취소되었다")}. 맡겨 둔 ${fmtB(p.gain||{})}이(가) 돌아왔다.`);break;
+  case "purse":S.gold+=Math.floor(+p.gold||0);say(`※ 선원 월급 ${Math.floor(+p.gold||0)}G를 찾았다.`);break;
+  case "bottle_found":{const b=S.out.find(x=>x.srv&&!x.r);if(b)b.r=1;say("※ 누군가 당신의 병 편지를 주웠다!");break}
   case "bottle_reply":S.mail.unshift({from:cleanStr(p.from,30),text:cleanStr(p.text,80),t:clock(),re:cleanStr(p.re,80)});S.mail.length=Math.min(S.mail.length,40);
-    say(`✉ ${esc(p.from)}의 답장: “${esc(p.text)}”`);break;
+    say(`※ ${esc(p.from)}의 답장: “${esc(p.text)}”`);break;
   default:O.applyExtra&&O.applyExtra(d)
   }}catch(e){}}
 
@@ -121,19 +139,19 @@ let prevNear=new Set(),dockOpen=false,nearSig="";
 function dock(){let e=$("olb");if(e)return e;
   e=document.createElement("div");e.id="olb";e.hidden=true;
   e.style.cssText="position:fixed;right:12px;bottom:12px;z-index:9;max-width:94vw";
-  e.innerHTML=`<div id="olp" class="card" hidden style="background:var(--bg);width:min(380px,94vw);max-height:68vh;overflow:auto;margin-bottom:8px;text-align:left"></div><div style="text-align:right"><button id="olbtn" class="pri" onclick="Online.toggleDock()" style="background:var(--bg);margin:0"></button></div>`;
+  e.innerHTML=`<div id="olp" class="card" hidden style="width:min(380px,94vw);max-height:68vh;overflow:auto;margin-bottom:8px;text-align:left"></div><div style="text-align:right"><button id="olbtn" class="pri" onclick="Online.toggleDock()" style="margin:0;box-shadow:0 8px 20px -8px var(--shadow)"></button></div>`;
   document.body.appendChild(e);return e}
 O.toggleDock=()=>{dockOpen=!dockOpen;nearSig="";renderDock()};
 function noticeNearby(r){
   if(!gameOn())return;const ids=new Set(r.nearby.map(n=>n.id));
-  for(const n of r.nearby)if(!prevNear.has(n.id)){say(`⛵ 다른 배가 가까이 있다: <b>${esc(n.name)}</b>의 ${esc(n.ship)}. (오른쪽 아래 '바다 위의 사람들'에서 인사·거래)`);O.crewLine&&O.crewLine("ship",{n:n})}
+  for(const n of r.nearby)if(!prevNear.has(n.id)){say(`※ 다른 배가 가까이 있다: <b>${esc(n.name)}</b>의 ${esc(n.ship)}. (오른쪽 아래 '바다 위의 사람들'에서 인사·거래)`);O.crewLine&&O.crewLine("ship",{n:n})}
   prevNear=ids}
 const dirs=["북","북동","동","남동","남","남서","서","북서"];
 function whereTxt(n){if(n.loc==="port")return "같은 부두";const dx=dl(n.x-S.x,WW),dy=dl(n.y-S.y,WH),a=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;return `${dirs[Math.round(a/45)%8]}쪽 ${n.d}해리`}
 function renderDock(){
   const d=dock(),on=O.on&&gameOn()&&O.data;d.hidden=!on;if(!on)return;
   const r=O.data,inT=r.trades.incoming.length,inv=r.crew.invitesIn.length,badge=r.nearby.length+inT+inv;
-  $("olbtn").textContent=`⚓ 바다 위의 사람들${badge?` (${badge})`:""}`;
+  $("olbtn").textContent=`바다 위의 사람들${badge?` (${badge})`:""}`;
   $("olp").hidden=!dockOpen;if(!dockOpen)return;
   const sig=JSON.stringify([r.nearby.map(n=>[n.id,n.loc]),r.trades,r.crew.captainOf,r.crew.invitesIn,r.crew.invitesOut,r.crew.me&&r.crew.me.purse]);
   if(sig===nearSig){document.querySelectorAll("#olp [data-w]").forEach(e=>{const n=r.nearby.find(x=>x.id===+e.dataset.w);if(n)e.textContent=whereTxt(n)});return}
@@ -149,16 +167,16 @@ function renderDock(){
   if(inv)h+=`<h2>선원 제안</h2>`+r.crew.invitesIn.map(i=>`<div class="seat"><b>${esc(i.captainName)}</b> 선장이 배에 타 달라고 한다.<div style="margin-top:6px"><button class="pri" onclick="Online.respond(${i.id},true)">수락</button><button onclick="Online.respond(${i.id},false)">거절</button></div><div class="sub sm">수락하면 타이틀 화면에서 '선원으로 탑승'할 수 있다.</div></div>`).join("");
   const pu=r.crew.me?r.crew.me.purse:0;if(pu>0)h+=`<h2>선원 월급</h2><div class="row"><span>${pu}G가 쌓여 있다</span><button onclick="Online.withdraw()">내 항해로 찾기</button></div>`;
   $("olp").innerHTML=h}
-const doit=async(fn,after)=>{try{await fn();after&&after()}catch(e){if(gameOn())say("⚠ "+esc(e.message));else toast(e.message)}O.syncNow()};
+const doit=async(fn,after)=>{try{await fn();after&&after()}catch(e){if(gameOn())say("※ "+esc(e.message));else toast(e.message)}O.syncNow()};
 O.greetSel=(id,sel)=>{let t=sel.value;sel.selectedIndex=0;if(!t)return;if(t==="__c"){t=prompt("건넬 인사 (40자)","");if(!t)return}
-  doit(()=>api("/greet",{to:id,text:String(t).slice(0,40)}),()=>say("👋 인사를 건넸다."))};
+  doit(()=>api("/greet",{to:id,text:String(t).slice(0,40)}),()=>say("※ 인사를 건넸다."))};
 O.decline=id=>doit(()=>api("/trade/decline",{id}));
 O.cancelTrade=id=>doit(()=>api("/trade/cancel",{id}));
 O.accept=id=>{const t=O.data.trades.incoming.find(x=>x.id===id);if(!t||!canPay(t.want))return;doit(()=>api("/trade/accept",{id}))};
-O.invite=()=>{const u=$("ci-name").value.trim();if(u)doit(()=>api("/crew/invite",{username:u}),()=>say(`⚓ ${esc(u)}에게 선원 제안을 보냈다.`))};
+O.invite=()=>{const u=$("ci-name").value.trim();if(u)doit(()=>api("/crew/invite",{username:u}),()=>say(`※ ${esc(u)}에게 선원 제안을 보냈다.`))};
 O.cancelInvite=id=>doit(()=>api("/crew/cancel",{id}));
 O.dismiss=id=>{if(confirm("이 선원을 배에서 내리게 할까요?"))doit(()=>api("/crew/dismiss",{id}))};
-O.respond=(id,accept)=>doit(()=>api("/crew/respond",{id,accept}),()=>{if(accept&&gameOn())say("⚓ 선원 제안을 받아들였다. 타이틀 화면에서 선원으로 탑승할 수 있다.")});
+O.respond=(id,accept)=>doit(()=>api("/crew/respond",{id,accept}),()=>{if(accept&&gameOn())say("※ 선원 제안을 받아들였다. 타이틀 화면에서 선원으로 탑승할 수 있다.")});
 O.withdraw=()=>doit(()=>api("/crew/withdraw",{}));
 
 /* ---- 거래 제안 창 ---- */
@@ -188,7 +206,7 @@ O.sendTrade=async to=>{
   if(!canPay(give)||give.gold>S.gold){msg.textContent="내놓을 것이 모자라다.";return}
   if(Object.keys(give.items).length>5||Object.keys(want.items).length>5){msg.textContent="품목은 5개까지.";return}
   take(give);renderAll(); // 맡기는 순간 소지품에서 뺀다
-  try{await api("/trade/offer",{to,give,want});$("trm")&&$("trm").remove();say(`🤝 거래를 제안했다. 내놓은 것: ${fmtB(give)} / 원하는 것: ${fmtB(want)}`);saveGame()}
+  try{await api("/trade/offer",{to,give,want});$("trm")&&$("trm").remove();say(`※ 거래를 제안했다. 내놓은 것: ${fmtB(give)} / 원하는 것: ${fmtB(want)}`);saveGame()}
   catch(e){gain(give);renderAll();msg.textContent=e.message}
   O.syncNow()};
 
@@ -197,12 +215,12 @@ O.sendBottle=async text=>{try{await api("/bottle/send",{text})}catch(e){const b=
 O.pickBottle=async()=>{
   try{const r=await api("/bottle/find",{});
     if(r.bottle){S.mail.unshift({from:cleanStr(r.bottle.from,30),text:cleanStr(r.bottle.text,80),t:clock(),bid:r.bottle.id});S.mail.length=Math.min(S.mail.length,40);
-      say(`✉ 누군가 띄운 병이다. <b>${esc(r.bottle.from)}</b>: “${esc(r.bottle.text)}” (선장실에서 답장할 수 있다)`);renderAll();return}}catch(e){}
+      say(`※ 누군가 띄운 병이다. <b>${esc(r.bottle.from)}</b>: “${esc(r.bottle.text)}” (선장실에서 답장할 수 있다)`);renderAll();return}}catch(e){}
   const bb=pick(BOT);S.mail.unshift({from:bb[0],text:bb[1],t:clock()});S.mail.length=Math.min(S.mail.length,40);
-  say(`✉ ${esc(bb[0])}: “${esc(bb[1])}” ${bb[2]?fx(bb[2]):""}`);renderAll()};
+  say(`※ ${esc(bb[0])}: “${esc(bb[1])}” ${bb[2]?fx(bb[2]):""}`);renderAll()};
 O.reply=async bid=>{
   const t=prompt("답장 (60자)","");if(!t)return;const m=S.mail.find(x=>x.bid===bid);
-  try{await api("/bottle/reply",{id:bid,text:t.slice(0,60)});if(m)m.rp=1;say("✉ 답장을 병에 담아 바다에 띄웠다.");renderAll();saveGame()}catch(e){say("⚠ "+esc(e.message))}};
+  try{await api("/bottle/reply",{id:bid,text:t.slice(0,60)});if(m)m.rp=1;say("※ 답장을 병에 담아 바다에 띄웠다.");renderAll();saveGame()}catch(e){say("※ "+esc(e.message))}};
 
 /* ================= 채팅 ================= */
 const CH={world:[]};let curCh="world";const unread={};
@@ -242,7 +260,7 @@ function decorateTitle(){
   const b=$("tbtn");if(!b||!O.on||!O.user)return;let e=$("olt");
   if(!e){e=document.createElement("div");e.id="olt";e.style.cssText="margin-top:18px;border-top:1px solid var(--line);padding-top:12px";b.after(e)}
   const r=O.data,c=r&&r.crew;let h=`<div class="sm"><b>${esc(O.user.username)}</b> 님으로 접속 중 · 저장은 계정에 보관됩니다 <a onclick="Online.logout()">로그아웃</a></div>`;
-  if(c&&c.memberOf)h+=`<div style="margin-top:10px"><button class="pri" onclick="Online.enterCrew()" style="padding:8px 22px">⚓ 선원으로 탑승 — ${esc(c.memberOf.captain)} 선장의 ${esc(c.memberOf.ship?c.memberOf.ship.ship:"배")}</button><div class="sub sm" style="margin-top:4px">직책을 맡아 선장을 돕고, 전투와 잠수도 함께합니다.</div></div>`;
+  if(c&&c.memberOf)h+=`<div style="margin-top:10px"><button class="pri" onclick="Online.enterCrew()" style="padding:8px 22px">선원으로 탑승 — ${esc(c.memberOf.captain)} 선장의 ${esc(c.memberOf.ship?c.memberOf.ship.ship:"배")}</button><div class="sub sm" style="margin-top:4px">직책을 맡아 선장을 돕고, 전투와 잠수도 함께합니다.</div></div>`;
   if(c&&c.invitesIn.length)h+=c.invitesIn.map(i=>`<div class="sm" style="margin-top:8px"><b>${esc(i.captainName)}</b> 선장이 선원으로 초대했습니다. <button class="pri" onclick="Online.respond(${i.id},true)">수락</button><button onclick="Online.respond(${i.id},false)">거절</button></div>`).join("");
   if(c&&c.me&&c.me.purse>0)h+=`<div class="sm sub" style="margin-top:8px">선원 월급 ${c.me.purse}G가 쌓여 있습니다. 내 항해를 시작하면 '바다 위의 사람들'에서 찾을 수 있습니다.</div>`;
   e.innerHTML=h}
