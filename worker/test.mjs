@@ -304,3 +304,19 @@ test("장소 채팅: 같은 섬에 있는 사람끼리만", async () => {
   const sea = await sync(a.tok, me({ loc: "sea" }));
   assert.equal(sea.place, null);
 });
+
+test("선원 월급 받기: 한 번만, 지갑으로 옮겨진다", async () => {
+  const cap = await join_("colc"), mate = await join_("colm");
+  await call("/api/crew/invite", { username: "colm" }, cap.tok);
+  const inv = (await sync(mate.tok, me({}))).crew.invitesIn[0];
+  await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
+  await call("/api/crew/role", { role: "낚시꾼", name: "수집가" }, mate.tok);
+  assert.equal((await call("/api/crew/collect", {}, mate.tok)).status, 400, "월급이 없으면 못 받는다");
+  await call("/api/crew/duty", { duty: "fish" }, mate.tok);
+  const pu = (await sync(mate.tok, me({}))).crew.me.purse;
+  assert.ok(pu > 0, "purse=" + pu);
+  const rs = await Promise.all([call("/api/crew/collect", {}, mate.tok), call("/api/crew/collect", {}, mate.tok)]);
+  assert.equal(rs.filter((x) => x.status === 200).length, 1, "동시에 눌러도 한 번만");
+  assert.equal(rs.find((x) => x.status === 200).gold, pu);
+  assert.equal((await sync(mate.tok, me({}))).crew.me.purse, 0);
+});

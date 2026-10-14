@@ -782,6 +782,17 @@ route("POST", "/api/crew/withdraw", async ({ env, user }) => {
   return { ok: true, gold: p.purse };
 });
 
+// 선원 화면에서 월급을 내 지갑으로 옮긴다 (선원의 골드는 선장과 같이 내 쪽 저장 데이터가 갖는다). 한 문장으로 0으로 만들며 가져가서 두 번 받을 수 없다.
+route("POST", "/api/crew/collect", async ({ env, user }) => {
+  await limit(env, "ccol:" + user.id, 10, 60_000);
+  const p = await first(env, "SELECT purse FROM crew_profile WHERE user_id=?", user.id);
+  if (!p || p.purse <= 0) throw bad("찾을 월급이 없습니다.");
+  // 읽은 만큼만 빼는 한 문장: 동시에 두 번 눌러도 한 번만 성공한다 (그사이 쌓인 월급은 남는다)
+  const r = await first(env, "UPDATE crew_profile SET purse=purse-?1 WHERE user_id=?2 AND purse>=?1 RETURNING purse", p.purse, user.id);
+  if (!r) throw bad("찾을 월급이 없습니다.");
+  return { ok: true, gold: p.purse };
+});
+
 /* ---------- 관리자: 초대 코드 발급 ---------- */
 async function adminAuth(env, req, ip) {
   const key = String(env.ADMIN_KEY || "");
