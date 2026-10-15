@@ -168,28 +168,22 @@ test("선원 개편: 직책, 컨디션, 일 7종, 월급 보너스", async () =>
   assert.equal(w.status, 200);
   assert.equal(w.bonus, true);
   assert.equal(w.wage, 5 + 2);
-  assert.equal(w.cond, 88);
+  assert.equal(w.cond, 100, "컨디션 제한은 없다");
   const d = (await sync(cap.tok, me({ name: "선장" }))).deliveries.find((x) => x.kind === "crew_work");
   assert.match(d.payload.fx, /^f:\d+$/);
   assert.equal(d.payload.role, "요리사");
   assert.equal(d.payload.by, "요리왕");
   assert.ok(d.payload.text.includes("요리왕") && !d.payload.text.includes("mate2"), "항해일지 문구에 아이디가 아닌 캐릭터 이름");
 
-  // 새 일들이 모두 동작하고, 컨디션이 바닥나면 쉬어야 한다
+  // 새 일들이 모두 동작한다
   for (const duty of ["navigate", "haggle", "dive", "repair", "lookout", "fish"]) {
     const r = await call("/api/crew/duty", { duty }, mate.tok);
     assert.equal(r.status, 200, duty + " " + JSON.stringify(r));
   }
-  // 지원(전투 중)까지 하면 컨디션이 바닥난다
+  // 지원(전투 중)도 컨디션 없이 쿨다운만으로 동작한다
   await sync(cap.tok, me({ name: "선장", snap: { bt: { t: "상어", rd: 1, en: [], al: [] } } }));
   for (const kind of ["fire", "mend"]) assert.equal((await call("/api/crew/support", { kind }, mate.tok)).status, 200, kind);
-  const tired = await call("/api/crew/duty", { duty: "cook" }, mate.tok);
-  assert.equal(tired.status, 400);
-  assert.match(tired.error, /컨디션/);
-  const rest = await call("/api/crew/rest", {}, mate.tok);
-  assert.equal(rest.status, 200);
-  assert.ok(rest.cond >= 30);
-  assert.equal((await call("/api/crew/rest", {}, mate.tok)).status, 400, "쉬는 것도 쿨다운");
+  assert.equal((await call("/api/crew/duty", { duty: "cook" }, mate.tok)).status, 400, "쿨다운 중");
 
   // 배에서 내리면 직책이 비워지고, 다시 탑승하면 새로 정한다
   assert.equal((await call("/api/crew/leave", {}, mate.tok)).status, 200);
@@ -303,4 +297,20 @@ test("장소 채팅: 같은 섬에 있는 사람끼리만", async () => {
   assert.equal(rc.place, "place:4"); assert.deepEqual(rc.chat["place:3"], undefined);
   const sea = await sync(a.tok, me({ loc: "sea" }));
   assert.equal(sea.place, null);
+});
+
+test("선원 월급 받기: 한 번만, 지갑으로 옮겨진다", async () => {
+  const cap = await join_("colc"), mate = await join_("colm");
+  await call("/api/crew/invite", { username: "colm" }, cap.tok);
+  const inv = (await sync(mate.tok, me({}))).crew.invitesIn[0];
+  await call("/api/crew/respond", { id: inv.id, accept: true }, mate.tok);
+  await call("/api/crew/role", { role: "낚시꾼", name: "수집가" }, mate.tok);
+  assert.equal((await call("/api/crew/collect", {}, mate.tok)).status, 400, "월급이 없으면 못 받는다");
+  await call("/api/crew/duty", { duty: "fish" }, mate.tok);
+  const pu = (await sync(mate.tok, me({}))).crew.me.purse;
+  assert.ok(pu > 0, "purse=" + pu);
+  const rs = await Promise.all([call("/api/crew/collect", {}, mate.tok), call("/api/crew/collect", {}, mate.tok)]);
+  assert.equal(rs.filter((x) => x.status === 200).length, 1, "동시에 눌러도 한 번만");
+  assert.equal(rs.find((x) => x.status === 200).gold, pu);
+  assert.equal((await sync(mate.tok, me({}))).crew.me.purse, 0);
 });
