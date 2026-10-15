@@ -159,7 +159,6 @@ const LINES = {
     C: ["{by}이(가) 물보라를 일으키며 뛰어들었다가 {items}을(를) 들고 올라왔다.", "\"푸하!\" 수면 위로 솟은 {by}의 손에 {items}이(가) 들려 있다.", "한참을 잠잠하던 물 위로 {by}이(가) 불쑥 떠올랐다. 품에 {items}이(가) 가득하다."],
   },
 };
-const REST_LINES = ["해먹에 몸을 눕히자 배의 흔들림이 요람처럼 느껴졌다. 어느새 선잠이 들었다.", "선원실 구석에서 담요를 덮고 눈을 붙였다. 파도 소리가 자장가가 되어 주었다.", "따뜻한 차 한 잔을 마시고 해먹에 기댔다. 뭉친 어깨가 서서히 풀린다."];
 const SUP = {
   fire:     { need: "bt", cd: 20_000, cost: 8,  name: "포격 지원" },
   mend:     { need: "bt", cd: 25_000, cost: 8,  name: "응급처치" },
@@ -182,12 +181,9 @@ async function takeCooldown(env, uid, key, ms, t) {
     uid, key, t + ms, t);
   return changes(r) === 1;
 }
-// 컨디션을 쓰고 월급·경험을 올린다 (한 문장)
-async function needCond(env, uid, p, t, cost) {
-  const cur = condNow(p, t);
-  if (cur < cost) throw bad(`지쳐서 손이 말을 듣지 않습니다. (컨디션 ${cur}) 선원실 해먹에서 쉬세요.`);
-  return cur - cost;
-}
+// 선원도 선장과 같은 사람이라 '컨디션' 제한은 없앴다 (일의 제한은 쿨다운·하루 월급 한도, 허기·체력은 선원 화면이 선장처럼 계산한다).
+// 값은 호환을 위해 100 으로 고정해 돌려준다.
+async function needCond() { return 100; }
 
 async function doDuty(env, u, duty) {
   const d = DUTIES[duty];
@@ -671,14 +667,6 @@ route("POST", "/api/crew/role", async ({ env, user, body }) => {
   await run(env, "UPDATE crew_profile SET role=?, cname=? WHERE user_id=?", role, cname, user.id);
   return { ok: true, role, cname };
 });
-route("POST", "/api/crew/rest", async ({ env, user }) => {
-  const t = now(), p = await profile(env, user.id), cur = condNow(p, t);
-  if (cur >= 95) throw bad("아직 기운이 넘칩니다. 좀 더 일하고 쉬세요.");
-  if (!(await takeCooldown(env, user.id, "rest", 180_000, t))) throw bad("방금 쉬었습니다. 잠시 후에 다시 쉴 수 있어요.");
-  const cond = Math.min(100, cur + 30);
-  await run(env, "UPDATE crew_profile SET cond=?, cond_at=? WHERE user_id=?", cond, t, user.id);
-  return { ok: true, cond, msg: rpick(REST_LINES) };
-});
 // 선장이 올린 장면(sc)에서 이 선택지를 권한다. 선장 화면에 ★ 로 표시된다.
 route("POST", "/api/crew/advise", async ({ env, user, body }) => {
   await limit(env, "adv:" + user.id, 12, 60_000);
@@ -727,15 +715,6 @@ route("POST", "/api/crew/serve", async ({ env, user, body }) => {
   return { ok: true };
 });
 // 선원이 자기 몫의 음식을 먹고 컨디션을 회복한다 (회복량은 허기 회복량의 절반, 최대 20)
-route("POST", "/api/crew/eat", async ({ env, user, body }) => {
-  const t = now(), v = Math.floor(num(body.v, 1, 80, 10));
-  const p = await profile(env, user.id), cur = condNow(p, t);
-  if (cur >= 98) throw bad("배가 부르고 기운이 넘칩니다.");
-  if (!(await takeCooldown(env, user.id, "eat", 15_000, t))) throw bad("방금 먹었습니다.");
-  const cond = Math.min(100, cur + Math.min(20, Math.round(v / 2)));
-  await run(env, "UPDATE crew_profile SET cond=?, cond_at=? WHERE user_id=?", cond, t, user.id);
-  return { ok: true, cond };
-});
 // 선원 개인 보관함·일지 (선원 주방/소지품 탭)
 // 선원이 배 창고에 넣거나(put) 꺼낸다(take). 꺼낼 때는 서버가 먼저 줄이므로 같은 물건을 둘이 가져갈 수 없다.
 route("POST", "/api/ship/sto", async ({ env, user, body }) => {
