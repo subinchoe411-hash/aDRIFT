@@ -3,7 +3,7 @@
 
 /* ===== 창 닫기: 지도와 행동 말고는 모두 닫고 다시 열 수 있다 (브라우저에 기억) ===== */
 const Win=(()=>{
- const KEY="adrift.win",N={exp:"원정",sea:"바다",log:"기록",crew:"함께하는 선원",chat:"채팅",qtrk:"추적 중인 퀘스트"};
+ const KEY="adrift.win",N={sea:"바다",log:"기록",crew:"함께하는 선원",qtrk:"퀘스트",chat:"채팅"};
  let closed=new Set();try{closed=new Set(JSON.parse(localStorage.getItem(KEY)||"[]").filter(k=>N[k]))}catch(e){}
  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify([...closed]))}catch(e){}};
  function apply(){document.querySelectorAll("[data-win]").forEach(el=>{const id=el.dataset.win;
@@ -11,7 +11,7 @@ const Win=(()=>{
   el.classList.toggle("wclosed",closed.has(id))});fill()}
  function close(id){closed.add(id);save();apply()}
  function open(id){closed.delete(id);save();apply()}
- function fill(){const m=document.getElementById("winmenu");if(!m)return;const wb=document.getElementById("wbtn");if(wb)wb.className=closed.size?"has":"";
+ function fill(){const m=document.getElementById("wml");if(!m)return;const wb=document.getElementById("wbtn");if(wb)wb.className=closed.size?"has":"";
   m.innerHTML=`<div class="wmh">창</div>`+Object.keys(N).filter(k=>document.querySelector(`[data-win="${k}"]`)).map(k=>`<button type="button" class="wm${closed.has(k)?"":" on"}" onclick="Win.toggle('${k}')"><i>${closed.has(k)?"□":"■"}</i>${N[k]}</button>`).join("")+`<button type="button" class="wm" onclick="Win.all()">모두 열기</button>`}
  function menu(){const m=document.getElementById("winmenu");m.hidden=!m.hidden;fill()}
  document.addEventListener("click",e=>{const m=document.getElementById("winmenu");if(m&&!m.hidden&&!e.target.closest("#winmenu,#wbtn"))m.hidden=true});
@@ -142,14 +142,18 @@ const Q=(()=>{
  function open(){tab=acting().length&&!avail().filter(atOk).length?"act":avail().filter(atOk).length?"new":acting().length?"act":"new";if(!sel||!QD.find(x=>x.id===sel))sel="";document.getElementById("qwin").hidden=false;render()}
  function close(){document.getElementById("qwin").hidden=true}
  const qw=document.getElementById("qwin");qw.addEventListener("mousedown",e=>{if(e.target===qw)close()});document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!qw.hidden)close()});
- function trackHTML(){if(!S||!S.qs)return"";const nA=avail().filter(atOk).length,cur=trk()||acting()[0];let h="";
+ let ptab="q";
+ function trackHTML(){if(!S||!S.qs)return"";const nA=avail().filter(atOk).length,cur=trk()||acting()[0];
+  const tabs=`<div class="qtt"><button class="${ptab==="q"?"on":""}" onclick="Q.ptab('q')">퀘스트${nA?` <i class="m n">!</i>`:""}</button><button class="${ptab==="b"?"on":""}" onclick="Q.ptab('b')">보스</button></div>`;
+  if(ptab==="b"){const bh=window.Online&&Online.bossHTML?Online.bossHTML():"";return tabs+(bh||`<div class="sub sm">주간 해역 보스는 온라인에 접속해 있을 때 나타난다.</div>`)}
+  let h="";
   if(cur){const rd=st(cur)===3;h+=`<div class="qtk"><div class="qn">${rd?'<i class="m r">?</i>':'<i class="m p">…</i>'}<b>${esc(cur.n)}</b></div>${objs(cur)}${rd?`<button class="pri" onclick="Q.claim('${cur.id}')">보상 받기</button>`:`<div class="sub sm">보상 ${RWT(cur.r)}</div>`}</div>`}
   else h+=`<div class="sub sm">${nA?"받을 수 있는 퀘스트가 있다.":"추적 중인 퀘스트가 없다."}</div>`;
   if(S.quests.length)h+=`<h3>맡은 수배</h3>`+S.quests.map(x=>`<div class="q"><i>◆</i><span><b>${esc(x.name)}</b> <span class="sub sm">${x.state==="captured"?"포박 완료 → "+esc(I[x.home].n)+"에 인도":"추적 중"}</span></span><small>${x.reward}G</small></div>`).join("");
-  h+=(window.Online&&Online.bossHTML?Online.bossHTML():"")+`<div class="qlink"><button onclick="Q.open()">퀘스트 창 열기${nA?` <i class="m n">!</i>`:""}</button></div>`;return h}
+  h+=`<div class="qlink"><button onclick="Q.open()">퀘스트 창 열기</button></div>`;return tabs+h}
  function track$(){const e=document.getElementById("qst");if(!e)return;const h=trackHTML();if(e._h!==h){e._h=h;e.innerHTML=h}
   const bg=document.getElementById("qbadge");if(bg&&S&&S.qs){const n=avail().filter(atOk).length+QD.filter(q=>st(q)===3).length;bg.hidden=!n;bg.textContent=n}}
- return{open,close,render,accept,claim,drop,track,check,track$,tab:t=>{tab=t;sel="";render()},sel:id=>{sel=id;render()},fil:f=>{fil=f;render()},QD,fix(){S.qs=(S.qs&&typeof S.qs==="object")?S.qs:{};const ok={};QD.forEach(q=>{const v=S.qs[q.id];if(v===1||v===3||(q.i>=14&&v===2))ok[q.id]=v});S.qs=ok;if(typeof S.qtk!=="string"||!QD.find(q=>q.id===S.qtk))S.qtk=""}}})();
+ return{ptab:t=>{ptab=t;const e=document.getElementById("qst");if(e)e._h=null;track$()},open,close,render,accept,claim,drop,track,check,track$,tab:t=>{tab=t;sel="";render()},sel:id=>{sel=id;render()},fil:f=>{fil=f;render()},QD,fix(){S.qs=(S.qs&&typeof S.qs==="object")?S.qs:{};const ok={};QD.forEach(q=>{const v=S.qs[q.id];if(v===1||v===3||(q.i>=14&&v===2))ok[q.id]=v});S.qs=ok;if(typeof S.qtk!=="string"||!QD.find(q=>q.id===S.qtk))S.qtk=""}}})();
 
 /* ===== 파도 장면: 항해 중에만 움직이고, 바다의 세기만큼 배가 흔들린다 ===== */
 const Sea=(()=>{

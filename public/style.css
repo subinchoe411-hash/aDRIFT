@@ -216,3 +216,20 @@ button.d{color:var(--warn);border-color:var(--warn)}
 body.crew #seacard,body.crew #qbtn{display:none}
 .backh{margin-bottom:10px}.backh button{margin:0}
 .credit{margin-top:14px;font-size:11px;opacity:.8}.credit a{font-size:11px;margin-left:2px}#title .credit{margin-top:26px;text-align:center}
+/* 퀘스트 창 탭(퀘스트·보스), 사이드바 원정 */
+.qtt{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:-2px 0 10px}.qtt button{margin:0 0 -1px;border:0;border-bottom:2px solid transparent;border-radius:0;background:none;padding:3px 12px;color:var(--sub)}.qtt button.on{color:var(--ink);border-bottom-color:var(--acc);font-weight:700}.qtt .m{width:15px;height:15px;font-size:10px;vertical-align:1px}
+#exp .row{font-size:13px}#exp .sub.sm{line-height:1.5}
+.wmset{border-top:0}.wmb{display:flex;flex-direction:column;gap:4px;padding:0 4px}.wmb button{margin:0;text-align:left}#svm{padding:2px 8px}
+body.crew .wmset{display:none}
+/* 창을 닫으면 남은 창이 빈자리를 채운다 (넓은 화면) */
+@media(min-width:821px){
+ #rcol{position:sticky;top:6px;align-self:start;height:calc(100vh - 130px);min-height:360px}
+ #rcol>.card{display:flex;flex-direction:column;min-height:0;flex:1 1 0;overflow:hidden}
+ #rcol>[data-win=crew]{flex:0 1 auto;overflow:auto}
+ #rcol>[data-win=qtrk]{flex:1 1 0}#rcol>[data-win=chat]{flex:1.3 1 0}
+ #qst{flex:1;min-height:0;overflow:auto}
+ #chl{flex:1;max-height:none;min-height:60px}
+ #v-deck.col{min-height:calc(100vh - 130px)}
+ #seacard{display:flex;flex-direction:column;flex:1 1 170px;min-height:0}#seacard canvas{flex:1 1 0;min-height:100px;height:100px}
+ #v-deck>[data-win=log]{display:flex;flex-direction:column;flex:1.4 1 200px;min-height:0}#v-deck>[data-win=log] #log{flex:1;max-height:none;min-height:0}
+}
