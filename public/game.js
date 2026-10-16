@@ -311,7 +311,7 @@ function cleanSaved(tpl,src){const o={};if(!src||typeof src!=="object")return o;
  for(const k of Object.keys(src)){if(!own(tpl,k)||SKIP.has(k))continue;const v=src[k],t=tpl[k];
   if(t instanceof Set){if(!(v instanceof Set))continue}else if(Array.isArray(t)){if(!Array.isArray(v))continue}else if(t===null){if(v!==null&&typeof v!=="object")continue}else if(typeof t==="object"){if(!v||typeof v!=="object"||Array.isArray(v)||v instanceof Set)continue}else if(typeof t!==typeof v)continue;
   o[k]=cleanVal(v)}return o}
-function fixState(){S.xp=Object.assign({cook:0,fight:0,med:0,fix:0},S.xp&&typeof S.xp==="object"?S.xp:{});S.gold=nm_(S.gold,0,1e8);S.hp=nm_(S.hp,0,3000);S.hun=nm_(S.hun,0,100);S.hull=nm_(S.hull,0,2000);S.lv=Math.round(nm_(S.lv,0,SH.length-1));S.t=nm_(S.t,0,1e8);S.spd=1;
+function fixState(){S.xp=Object.assign({cook:0,fight:0,med:0,fix:0},S.xp&&typeof S.xp==="object"?S.xp:{});S.fa=nm_(S.fa,0,100,0);fixExp();S.gold=nm_(S.gold,0,1e8);S.hp=nm_(S.hp,0,3000);S.hun=nm_(S.hun,0,100);S.hull=nm_(S.hull,0,2000);S.lv=Math.round(nm_(S.lv,0,SH.length-1));S.t=nm_(S.t,0,1e8);S.spd=1;
  S.hd=((nm_(S.hd,-1e5,1e5)%360)+360)%360;S.x=((nm_(S.x,-1e5,1e5)%WW)+WW)%WW;S.y=((nm_(S.y,-1e5,1e5)%WH)+WH)%WH;S.wind=((nm_(S.wind,-1e5,1e5)%360)+360)%360;S.ws=nm_(S.ws,.2,3,1);S.sl=Math.round(nm_(S.sl,0,3,2));S.hon=nm_(S.hon,0,1e5);S.inf=nm_(S.inf,0,1e5);S.dk=Math.round(nm_(S.dk,-1,I.length-1,-1));S.isl=null;
  if(S.tx!=null)S.tx=nm_(S.tx,0,WW);if(S.ty!=null)S.ty=nm_(S.ty,0,WH);S.path=(Array.isArray(S.path)?S.path:[]).filter(p=>Array.isArray(p)&&p.length>=2).slice(0,400).map(p=>[nm_(p[0],0,WW),nm_(p[1],0,WH)]);
  for(const key of["inv","sto"]){const src=S[key]||{},o={};for(const k of Object.keys(src)){if(knownItem(k)){const n=Math.floor(nm_(src[k],0,9999));if(n>0)o[k]=n}}S[key]=o}
@@ -643,7 +643,7 @@ const hm=()=>SH[S.lv].hull,hpm=()=>80+C.st.체력*6+(S&&S.xp?4*(lv("fight")-1):0
 const clock=()=>{const x=HRF(),hh=Math.floor(x),mm=Math.floor((x%1)*60);return `${Math.floor(S.t/1440)+1}일째 ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`};
 const say=m=>{if(!S)return;S.logs.unshift(`<div>${clock()} ${m}</div>`);S.logs.length=Math.min(S.logs.length,60);["log","log2","log3"].forEach(i=>{if($(i))$(i).innerHTML=S.logs.join("")})};
 const flush=()=>{if(LD){say(LD);LD=""}};
-function add(k,n=1){const r=capI()-tot(S.inv),a=Math.max(0,Math.min(n,r));if(a)S.inv[k]=(S.inv[k]||0)+a;let b=n-a;if(b>0){const s=Math.max(0,Math.min(b,capS()-tot(S.sto)));if(s){S.sto[k]=(S.sto[k]||0)+s;b-=s;say("짐이 가득 차 "+k+" "+s+"개를 창고로 보냈다.")}if(b>0)say(k+" "+b+"개는 둘 곳이 없어 버렸다.")}}
+function add(k,n=1){const r=capI()-tot(S.inv),a=Math.max(0,Math.min(n,r));if(a){S.inv[k]=(S.inv[k]||0)+a;if(S.voy)S.voy.loot[k]=(S.voy.loot[k]||0)+a}let b=n-a;if(b>0){const s=Math.max(0,Math.min(b,capS()-tot(S.sto)));if(s){S.sto[k]=(S.sto[k]||0)+s;b-=s;say("짐이 가득 차 "+k+" "+s+"개를 창고로 보냈다.")}if(b>0)say(k+" "+b+"개는 둘 곳이 없어 버렸다.")}}
 function art(){const u=ARTS.filter(a=>!S.dex.has(a[0])),a=pick(u.length?u:ARTS);S.dex.add(a[0]);add(a[0]);LD="「"+a[0]+"」 — "+a[1];return "유물 「"+a[0]+"」"}
 function rrec(){const u=RC.filter(r=>!S.known.has(r.n));if(!u.length)return"";const r=pick(u);S.known.add(r.n);return "레시피 "+r.n+"("+r.i.join("+")+")"}
 function fx(f){const o=[];f.split(";").forEach(e=>{const[a,b,c]=e.split(":");
@@ -660,14 +660,15 @@ function curDist(c,x,y){const dx=dl(x-c.x,WW),dy=dl(y-c.y,WH),ux=Math.sin(rad(c.
 function curAt(x,y){let b=null;CUR.forEach((c,i)=>{const dx=dl(x-c.x,WW),dy=dl(y-c.y,WH),ux=Math.sin(rad(c.ang)),uy=-Math.cos(rad(c.ang)),t=dx*ux+dy*uy;if(t>=0&&t<=c.len&&Math.abs(-dx*uy+dy*ux)<=c.w/2)b={i,c}});return b}
 const curBoost=()=>{if(!S.man||!S.sail)return 0;const q=curAt(S.x,S.y);if(!q)return 0;const d=Math.abs(((S.hd-q.c.ang+540)%360)-180);return d<=50?2.2:d>=130?-1.2:0};
 const boostV=()=>S.boost&&S.t<S.boost.until?S.boost.v:0;
-const knM=()=>{const B=2.6+SH[S.lv].spd+M("spd"),d=Math.abs(S.sl-idealSail()),t=d===0?1.1:d===1?.9:.65;return SPEEDK*Math.max(.3,B*sEff(wa())*t*(.7+.3*S.ws)*1.5+boostV()+curBoost())};
-const kn=()=>S.man?knM():SPEEDK*Math.max(.8,2.6+SH[S.lv].spd+M("spd")+1.6*Math.cos(rad(S.hd-S.wind))+boostV());
+const fatF=()=>S&&S.fa>60?1-(S.fa-60)/200:1;
+const knM=()=>fatF()*(()=>{const B=2.6+SH[S.lv].spd+M("spd"),d=Math.abs(S.sl-idealSail()),t=d===0?1.1:d===1?.9:.65;return SPEEDK*Math.max(.3,B*sEff(wa())*t*(.7+.3*S.ws)*1.5+boostV()+curBoost())})();
+const kn=()=>S.man?knM():fatF()*SPEEDK*Math.max(.8,2.6+SH[S.lv].spd+M("spd")+1.6*Math.cos(rad(S.hd-S.wind))+boostV());
 const wlabel=()=>{const a=wa();return a<35?"순풍":a<75?"뒤측풍":a<115?"측풍":a<150?"앞측풍":"맞바람"};
 const trimMsg=()=>{const i=idealSail();return S.sl===i?"돛이 알맞게 부푼다":S.sl<i?"돛이 바람을 다 받지 못한다":(S.ws>1.3?"돛이 비명을 지른다!":"돛이 너무 팽팽하다")};
 const vis=()=>Math.max(3,6+SH[S.lv].vis+M("vis"));
 const EDI=n=>BV[n]!==undefined;
 /* ---- 시작 ---- */
-function newState(){return {t:360,x:I[0].dx,y:I[0].dy,hd:0,tx:null,ty:null,path:[],sail:false,hun:80,hull:100,hp:80+C.st.체력*6,ct:{},tt:new Set(["초보 선장"]),title:"초보 선장",cur:null,buff:null,auto:{on:true,th:20},nf:-999,cs:new Set(),rs:new Set(),rmsg:0,sideOpen:false,quests:[],qn:"",curQ:null,curP:null,curB:null,pass:-1,selS:null,bb:0,hon:0,inf:0,inC:null,dist:0,air:0,airMax:0,scId:"",sel2:null,cookLog:[],gd:new Set(),xp:{cook:0,fight:0,med:0,fix:0},ef:[],eq:{w:"녹슨 단검",a:null},cab:"char",bld:null,spot:null,bt:null,out:[],mail:[],bj:null,bjo:0,fg:null,fgi:0,man:false,sl:2,ws:1,boost:null,lk:0,acc2:0,sm:-999,gh:null,dv:null,gold:60,wind:90,dk:0,isl:null,view:"deck",lv:0,act:null,spd:1,acc:0,over:false,sel:new Set(),pend:null,chat:0,seen:new Set([0]),mk:0,dex:new Set(),logs:[],
+function newState(){return {fa:0,voy:null,rec:{far:0,n:0,drifts:0},last:null,t:360,x:I[0].dx,y:I[0].dy,hd:0,tx:null,ty:null,path:[],sail:false,hun:80,hull:100,hp:80+C.st.체력*6,ct:{},tt:new Set(["초보 선장"]),title:"초보 선장",cur:null,buff:null,auto:{on:true,th:20},nf:-999,cs:new Set(),rs:new Set(),rmsg:0,sideOpen:false,quests:[],qn:"",curQ:null,curP:null,curB:null,pass:-1,selS:null,bb:0,hon:0,inf:0,inC:null,dist:0,air:0,airMax:0,scId:"",sel2:null,cookLog:[],gd:new Set(),xp:{cook:0,fight:0,med:0,fix:0},ef:[],eq:{w:"녹슨 단검",a:null},cab:"char",bld:null,spot:null,bt:null,out:[],mail:[],bj:null,bjo:0,fg:null,fgi:0,man:false,sl:2,ws:1,boost:null,lk:0,acc2:0,sm:-999,gh:null,dv:null,gold:60,wind:90,dk:0,isl:null,view:"deck",lv:0,act:null,spd:1,acc:0,over:false,sel:new Set(),pend:null,chat:0,seen:new Set([0]),mk:0,dex:new Set(),logs:[],
  inv:{소금:4,기름:2,쌀:3,밀가루:2,양파:2,감자:3,레몬:1,목재:2,"마른 빵":3,"녹슨 단검":1},sto:{},known:new Set(RC.filter(r=>r.i[1]==="소금"||r.n==="해초수프"||r.n==="감자구이").map(r=>r.n))};}
 function startGame(){C.name=cleanName(C.name);window.Online&&Online.stoReset&&Online.stoReset(true);show("game");setView();genWorld();I[0].v=1;I[0].k=1;
  S=newState();
@@ -692,10 +693,10 @@ function cook(){const mx=S.lv>=1?3:2,ing=[...S.sel];if(ing.length<2)return say("
   const was=S.known.has(r.n);add(r.n);S.known.add(r.n);addXp("cook",was?2:5);lg({t:clock(),n:r.n,ing,v:r.v,k:was?"ok":"new"});
   say(was?"조리: "+r.n+"을(를) 만들었다.":"조리: 새 레시피를 알아냈다 — "+r.n+" ("+r.i.join("+")+")")})}
 function repair(){if(!(S.inv.목재>0))return say("목재가 없다.");S.inv.목재--;start("갑판 수리",12,()=>{S.hull=Math.min(hm(),S.hull+(15+M("hull")*10)*(1+.12*(lv("fix")-1)));addXp("fix",3);say("갑판 수리: 선체가 단단해졌다.")})}
-function eat(n){if(!(S.inv[n]>0)||!EDI(n))return;S.inv[n]--;ct("eat");const v=Math.round(BV[n]*(1+M("cook")));S.hun=Math.min(100,S.hun+v);if(DISH.has(n)&&BV[n]>=24)addEf("포만",240);say(n+"을(를) 먹었다. 허기 +"+v);renderAll()}
+function eat(n){if(!(S.inv[n]>0)||!EDI(n))return;S.inv[n]--;ct("eat");const v=Math.round(BV[n]*(1+M("cook")));S.hun=Math.min(100,S.hun+v);S.fa=Math.max(0,S.fa-Math.round(v/4));if(DISH.has(n)&&BV[n]>=24)addEf("포만",240);say(n+"을(를) 먹었다. 허기 +"+v);renderAll()}
 function autoEat(){const k=Object.keys(S.inv).filter(k=>S.inv[k]>0&&EDI(k)),need=100-S.hun;if(!k.length){if(S.t-S.nf>180){S.nf=S.t;say("자동 식사: 먹을 것이 없다!")}return false}k.sort((a,b)=>BV[a]-BV[b]);const c=k.filter(x=>Math.round(BV[x]*(1+M("cook")))<=need).pop()||k[0],v=Math.round(BV[c]*(1+M("cook")));S.inv[c]--;ct("eat");S.hun=Math.min(100,S.hun+v);if(DISH.has(c)&&BV[c]>=24)addEf("포만",240);say(`자동 식사: ${c}을(를) 먹었다. 허기 +${v}`);return true}
 function autoLoop(){let n=0;while(S.hun<=S.auto.th&&n<3&&autoEat())n++;if(n)renderAll()}
-function rest(){if(S.hun<15)return say("배가 너무 고파 쉴 수가 없다.");start("휴식",36,()=>{S.hp=Math.min(hpm(),S.hp+12);say("휴식: 한숨 돌렸다. 체력 +12")})}
+function rest(){if(S.hun<15)return say("배가 너무 고파 쉴 수가 없다.");start("휴식",36,()=>{S.hp=Math.min(hpm(),S.hp+12);S.fa=Math.max(0,S.fa-15);say("휴식: 한숨 돌렸다. 체력 +12, 피로 -15")})}
 function eatBest(){const k=Object.keys(S.inv).filter(k=>S.inv[k]>0&&EDI(k)).sort((a,b)=>BV[b]-BV[a])[0];k?eat(k):say("먹을 것이 없다.")}
 function mv(k,n,to){const a=to==="s"?S.inv:S.sto,b=to==="s"?S.sto:S.inv,room=(to==="s"?capS()-tot(S.sto):capI()-tot(S.inv));n=n==="all"?a[k]:Math.min(n,a[k]);n=Math.min(n,room);if(n<=0)return say("자리가 모자라다.");a[k]-=n;b[k]=(b[k]||0)+n;renderAll()}
 const wI=()=>I[S.isl];
@@ -730,6 +731,43 @@ function event(){if(S.dk>=0||S.isl!==null||S.inC||S.pend)return;const h=Math.flo
  else if(r<18+L)say("낯선 상선과 마주쳤다. 물자를 나누고 "+fx(`g:${5+R(20)}`));
  else if(r<28+L){const it=pick(["목재","럼","달걀"]);say("표류물을 건졌다. "+fx(`i:${it}:1`))}
  else if(r<36)say(pick(["멀리서 고래가 숨을 뿜는다.","돌고래 떼가 뱃머리를 따라온다.","갈매기 한 마리가 마스트에 앉았다 간다.","물빛이 갑자기 짙은 청록으로 변한다."]))}
+
+/* ===== 원정: 항구에서 멀어질수록 피로가 쌓이고, 귀항 한계를 넘기면 표류한다 =====
+   '얼마나 멀리 갈 수 있나 / 언제 돌아서나'가 이 게임의 긴장이다. 피로는 먹거나 쉬면 줄고 항구에 닿으면 풀린다.
+   원정 중 얻은 것(전리품)은 귀항해야 안전하다. 죽는 일은 없고, 표류하면 전리품의 일부만 잃는다. */
+function fixExp(){const n=(v,a,b)=>Math.max(a,Math.min(b,+v||0));S.rec=(S.rec&&typeof S.rec==="object")?{far:n(S.rec.far,0,1e3),n:Math.floor(n(S.rec.n,0,1e6)),drifts:Math.floor(n(S.rec.drifts,0,1e6))}:{far:0,n:0,drifts:0};
+ const v=S.voy;if(v&&typeof v==="object"){const loot={};for(const k in (v.loot||{})){if(knownItem(k)){const c=Math.floor(n(v.loot[k],0,9999));if(c>0)loot[k]=c}}S.voy={t0:n(v.t0,0,1e8),px:n(v.px,0,WW),py:n(v.py,0,WH),far:n(v.far,0,1e3),nm:n(v.nm,0,1e5),g0:n(v.g0,0,1e8),sn:Math.floor(n(v.sn,0,500)),loot,w60:v.w60?1:0,w80:v.w80?1:0,wb:v.wb?1:0,drift:Math.floor(n(v.drift,0,99))}}else S.voy=null;
+ const l=S.last;if(l&&typeof l==="object"){const loot={};for(const k in (l.loot||{})){if(knownItem(k)){const c=Math.floor(n(l.loot[k],0,9999));if(c>0)loot[k]=c}}S.last={dur:n(l.dur,0,1e6),nm:n(l.nm,0,1e5),far:n(l.far,0,1e3),rec:l.rec?1:0,gold:Math.floor(n(l.gold,-1e8,1e8)),bonus:Math.floor(n(l.bonus,0,1e8)),seen:Math.floor(n(l.seen,0,500)),drift:Math.floor(n(l.drift,0,99)),loot}}else S.last=null}
+function nearPort(){let b=null;I.forEach((w,i)=>{if(!(w.k||i===0))return;const d=TD2(w.dx,w.dy,S.x,S.y);if(!b||d<b.d)b={i,d}});return b||{i:0,d:0}}
+const fatRate=d=>Math.max(.05,(.5+.06*d)*Math.max(.5,1-(C.st.체력-3)*.04)*Math.max(.5,1-M("hull")*.5));
+const fatBack=d=>{const kv=Math.max(.5,kn()||1);return fatRate(d/2)*d/(kv/60)};
+function expStart(){S.last=null;S.voy={t0:S.t,px:S.x,py:S.y,far:0,nm:0,g0:S.gold,sn:S.seen.size,loot:{},w60:0,w80:0,wb:0,drift:0};say("원정을 시작한다. 항구에서 멀어질수록 피로가 쌓인다. 귀항 여유를 살피며 나아가자.")}
+function expEnd(){const v=S.voy;S.voy=null;if(!v)return;const dur=Math.round(S.t-v.t0);if(dur<10||v.far<1.5)return;
+ const rec=v.far>S.rec.far+.05,bonus=Math.round((v.far*2+v.far*v.far*.15)*(1+M("gold")));if(rec)S.rec.far=Math.round(v.far*10)/10;S.rec.n++;S.gold+=bonus;if(rec)S.hon+=1;
+ S.last={dur,nm:Math.round(v.nm*10)/10,far:Math.round(v.far*10)/10,rec:rec?1:0,gold:S.gold-v.g0,bonus,seen:S.seen.size-v.sn,drift:v.drift,loot:v.loot};
+ say(`원정을 마치고 돌아왔다. 항구에서 가장 멀리 ${S.last.far}해리, 원정 보너스 ${bonus}G${rec?" — 새 최고 기록!":""}`);if(window.fxBig)fxBig(rec?"새 원정 기록":"무사 귀항",`${S.last.far}해리 · 보너스 ${bonus}G`,rec?"relic":"ok");renderAll()}
+function drift(){const v=S.voy;S.fa=72;S.sail=false;S.man=false;S.tx=null;S.ty=null;S.path=[];S.act=null;S.rec.drifts++;if(v)v.drift++;
+ let lost=[];if(v){for(const k in v.loot){const n=Math.floor(v.loot[k]*.3),h=Math.min(n,S.inv[k]||0);if(h>0){S.inv[k]-=h;if(S.inv[k]<=0)delete S.inv[k];v.loot[k]-=h;lost.push(k+" "+h)}}}
+ const gl=v?Math.round(Math.max(0,S.gold-v.g0)*.2):0;if(gl>0)S.gold=Math.max(0,S.gold-gl);S.hull-=Math.round(hm()*.08);
+ for(let t=0;t<12;t++){const a=rnd()*Math.PI*2,nx=S.x+Math.cos(a)*2,ny=S.y+Math.sin(a)*2;if(!landAt(nx,ny)){S.x=nx;S.y=ny;break}}normS();
+ say(`피로가 한계에 닿아 돛이 풀리고 배가 해류에 떠밀려 표류했다. 선체가 상했고${lost.length||gl?` 원정 전리품 일부를 잃었다 (${[...lost,...(gl?[gl+"G"]:[])].join(", ")}).`:" 다행히 잃은 것은 없다."} 먹고 쉬면서 정신을 차리자.`);if(window.fxBig)fxBig("표류","피로 한계 — 전리품 일부를 잃었다","bad");renderAll()}
+function expTick(dt){
+ const atSea=S.isl===null&&!S.inC&&S.dk<0;
+ if(!atSea){S.fa=Math.max(0,S.fa-dt*3);if(S.voy)expEnd();return}
+ if(!S.voy){if(!S.sail)return;expStart()}
+ const v=S.voy,np=nearPort(),mv=TD2(v.px,v.py,S.x,S.y);v.nm+=mv;v.px=S.x;v.py=S.y;v.far=Math.max(v.far,np.d);
+ S.fa=S.sail?Math.min(100,S.fa+fatRate(np.d)*dt*(OFFL?.4:1)):Math.max(0,S.fa-dt*.25);
+ if(OFFL){S.fa=Math.min(S.fa,95);return}
+ if(S.fa>=60&&!v.w60){v.w60=1;say("몸이 무거워진다. 피로가 쌓이고 있다. 먹거나 쉬면 줄어든다.")}
+ if(S.fa>=80&&!v.w80){v.w80=1;say("피로가 심하다! 이대로 100%가 되면 표류한다. 돌아가거나 먹고 쉬자.");if(window.fxBig)fxBig("피로 한계 임박","돌아가거나 먹고 쉬자","warn")}
+ if(!v.wb&&S.fa+fatBack(np.d)>100&&np.d>2){v.wb=1;say("지금 돌아서도 피로가 한계를 넘을 것 같다. 어서 먹고 쉬며 돌아가는 길을 줄이자.")}
+ if(S.fa>=100)drift()}
+function rExp(){const e=$("exp"),c=$("expcard");if(!e||!c)return;let h="";
+ if(S.voy){const v=S.voy,np=nearPort(),mg=Math.round(100-S.fa-fatBack(np.d)),ln=Object.values(v.loot).reduce((a,b)=>a+b,0);
+  h=`<div class="row"><span>가까운 항구</span><span>${esc(I[np.i].n)} · ${np.d.toFixed(1)}해리</span></div><div class="row"><span>피로</span><span class="sm">${Math.round(S.fa)}%</span></div><div class="bar${S.fa>=60?" w":""}"><i style="width:${S.fa}%"></i></div><div class="row"><span>귀항 여유</span><span style="${mg<10?"color:var(--warn);font-weight:700":""}">${mg>=0?"+"+mg:"부족 "+(-mg)}</span></div><div class="sub sm">이번 원정 · 최대 ${v.far.toFixed(1)}해리 · 항해 ${v.nm.toFixed(1)}해리 · 전리품 ${ln}개 · 최고 기록 ${S.rec.far}해리</div><div class="sub sm">먹거나 쉬면 피로가 줄고, 항구에 닿으면 풀린다. 100%가 되면 표류해 전리품 일부를 잃는다.</div>`}
+ else if(S.last){const l=S.last,items=Object.entries(l.loot).map(([k,n])=>k+" "+n).join(", ");
+  h=`<div class="row"><b>${l.rec?"새 최고 기록!":"무사 귀항"}</b><span class="sub sm">${l.dur>=60?Math.floor(l.dur/60)+"시간 ":""}${l.dur%60}분 항해</span></div><div class="row"><span>항구에서 가장 멀리</span><span>${l.far}해리</span></div><div class="row"><span>항해한 거리</span><span>${l.nm}해리</span></div><div class="row"><span>새로 본 섬</span><span>${l.seen}곳</span></div><div class="row"><span>원정 보너스</span><span>+${l.bonus}G</span></div><div class="row"><span>얻은 골드</span><span>${l.gold>=0?"+":""}${l.gold}G</span></div>${items?`<div class="sub sm">얻은 것: ${esc(items)}</div>`:""}${l.drift?`<div class="sub sm">표류 ${l.drift}번</div>`:""}<div class="sub sm">최고 기록 ${S.rec.far}해리 · 원정 ${S.rec.n}번</div><button onclick="S.last=null;renderAll()">확인</button>`}
+ c.hidden=!h;if(h!==e._h){e.innerHTML=h;e._h=h}}
 function tick(dt){S.t+=dt;S.hun=Math.max(OFFL?Math.min(S.hun,15):0,S.hun-dt/6*(1+M("hun"))*dfx().hun*(OFFL?.4:1));if(S.auto.on&&S.hun<=S.auto.th)autoLoop();if(S.hun<=0)S.hp-=dt/15;else if(S.hun>40)S.hp=Math.min(hpm(),S.hp+dt/45);efTick(dt);S.ct.gold=Math.max(S.ct.gold||0,S.gold);chkT();chkGoals();
  if(S.hp<=0){const st=S.hun<=0;S.hp=hpm()*.4;S.hun=Math.max(S.hun,st?35:30);S.t+=480;ct("faint");say(st?"허기와 체력이 모두 바닥나 쓰러졌다. 지나가던 어선이 구해 주먹밥을 나눠 주었고, 8시간 뒤에야 눈을 떴다.":"정신을 잃었다가 8시간 뒤 깨어났다.");if(S.inC){S.inC=null;S.cur=null;S.pend=null;S.act=null;S.view="deck"}renderAll()}S.wind=(S.wind+(rnd()-.5)*dt*.5+360)%360;S.ws=Math.min(1.7,Math.max(.4,S.ws+(rnd()-.5)*dt*.012));
  if(S.sail&&S.man){const rf=inReef(S.x,S.y),cb=curBoost(),st=kn()/60*dt*(rf?(S.sl===1?.55:.7):1),a=rad(S.hd),nx=S.x+Math.sin(a)*st,ny=S.y-Math.cos(a)*st;if(landAt(nx,ny)){S.sail=false;S.hull-=6;say("얕은 곳에 부딪혔다! 선체가 상했다. 닻을 내렸다.");renderAll()}else{S.x=nx;S.y=ny;ct("nm",st);ct("mnm",st);if(cb>0)ct("cur",st);if(rf&&S.sl>1){S.hull-=dt*.35;if(S.t-S.sm>45){S.sm=S.t;say("암초에 선체가 긁힌다! 돛을 접고 천천히 지나자.")}}}}
@@ -741,6 +779,7 @@ function tick(dt){S.t+=dt;S.hun=Math.max(OFFL?Math.min(S.hun,15):0,S.hun-dt/6*(1
  if(S.man&&S.sail&&S.sl>idealSail()&&S.ws>1.3){S.hull-=dt*.12;if(S.t-S.sm>45){S.sm=S.t;say("강풍에 돛이 비명을 지른다! 돛을 줄이자.")}}
  const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
  const dk=S.sail?-1:I.findIndex(w=>TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
+ expTick(dt);
  if(S.act){S.act.l-=dt;if(S.act.fl){const q=S.act.l/(S.act.t||1);S.act.fl.forEach(f=>{if(!f.d&&q<=f.at){f.d=1;say(f.t);f.f&&f.f()}})}if(S.act.l<=0){const f=S.act.fn;S.act=null;f();renderAll()}}
  S.acc+=dt;while(S.acc>=60){S.acc-=60;if(!OFFL)event()}S.acc2+=dt;while(S.acc2>=10){S.acc2-=10;if(!OFFL)small()}
  S.out.forEach(b=>{if(!b.r&&S.t>=b.due+(b.srv?4320:0)&&S.isl===null&&!S.inC){b.r=1;const rp=pick(REPLY),r=fx(rp[2]);S.mail.unshift({from:rp[0],text:rp[1],t:clock(),re:b.text});S.mail.length=Math.min(S.mail.length,40);say("누군가 당신의 병 편지를 주웠다! 답장이 파도에 실려 왔다.");say("※ "+rp[0]+": “"+rp[1]+"” "+r);renderAll()}})
@@ -754,6 +793,7 @@ function live(){const h=Math.max(0,S.hull);
  $("hd").textContent=Math.round(S.hd)+"°";$("kn").textContent=S.sail?kn().toFixed(1)+" 노트":"—";$("wd").textContent=D8[Math.round(((S.wind+180)%360)/45)%8]+"풍";$("ws").textContent=(S.ws<.85?"약함":S.ws<1.2?"보통":"강함")+" "+S.ws.toFixed(1);$("wa").textContent=S.man?wlabel()+" "+Math.round(sEff(wa())*100)+"%":wlabel();
  const d=S.tx===null?null:remD(),m=d===null?null:d/kn()*60;
  $("ds").textContent=d===null?"—":d.toFixed(1)+" 해리";$("eta").textContent=m===null?"—":Math.floor(m/60)+"시간 "+Math.round(m%60)+"분";
+rExp();
  if(S.view!=="deck")return;
  let s=`<g transform="translate(${VW/2-S.x*K},${VH/2-S.y*K})"><g stroke="var(--line)" stroke-width=".5">`;
  for(let gx=Math.floor((S.x-16)/5)*5;gx<S.x+16;gx+=5)s+=`<line x1="${gx*K}" y1="${(S.y-12)*K}" x2="${gx*K}" y2="${(S.y+12)*K}"/>`;
