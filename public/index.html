@@ -24,24 +24,21 @@
  <div class="row"><span>명예</span><span id="hn"></span></div><div class="row"><span>악명</span><span id="inf"></span></div><div class="row"><span>현상금</span><span id="wt"></span></div>
  <h2>배 <span class="sub" id="shn"></span></h2>
  <div class="row"><span>선체</span><span id="uv" class="sm"></span></div><div class="bar" id="ub"><i></i></div>
- <h2>항해</h2>
- <div class="row"><span>방위</span><span id="hd"></span></div><div class="row"><span>속력</span><span id="kn"></span></div>
- <div class="row"><span>바람</span><span id="wd"></span></div><div class="row"><span>풍속</span><span id="ws"></span></div><div class="row"><span>바람 각도</span><span id="wa"></span></div><div class="row"><span>남은 거리</span><span id="ds"></span></div><div class="row"><span>도착까지</span><span id="eta"></span></div>
-<h2>저장</h2><div><button onclick="manualSave()">지금 저장</button><button id="mutebtn" onclick="toggleMute()">소리 끄기</button><button onclick="resetGame()">처음부터</button></div><div id="svm" class="sub sm"></div>
+ <h2>원정</h2><div id="exp"></div>
+<div hidden><span id="hd"></span><span id="kn"></span><span id="wd"></span><span id="ws"></span><span id="wa"></span><span id="ds"></span><span id="eta"></span></div>
 <div class="sub sm credit" lang="ja" id="bgmcr">音楽：ユーフルカ <a href="https://youfulca.com/" target="_blank" rel="noopener noreferrer">https://youfulca.com/</a></div>
 <!-- TEST-BEGIN -->
  <div id="tstw" hidden><h2>개발자 도구</h2><div id="tst"></div></div>
 <!-- TEST-END -->
 </div></aside>
 <div id="rt">
- <div id="sky" data-orb="sun"><span class="orb"></span><span id="skyw"></span><span id="skyb"><button id="qbtn" onclick="Q.open()">퀘스트<i id="qbadge" hidden></i></button><button id="wbtn" onclick="Win.menu()">창</button></span><span id="skyt"></span></div><div id="winmenu" hidden></div>
+ <div id="sky" data-orb="sun"><span class="orb"></span><span id="skyw"></span><span id="skyb"><button id="qbtn" onclick="Q.open()">퀘스트<i id="qbadge" hidden></i></button><button id="wbtn" onclick="Win.menu()">창·설정</button></span><span id="skyt"></span></div><div id="winmenu" hidden><div id="wml"></div><div class="wmh wmset">설정</div><div class="wmset wmb"><button onclick="manualSave()">지금 저장</button><button id="mutebtn" onclick="toggleMute()">소리 끄기</button><button onclick="resetGame()">처음부터</button></div><div id="svm" class="sub sm wmset"></div></div>
  <nav id="tabs"></nav>
  <div id="mainw" class="dk">
   <div class="col" id="lcol">
    <div id="v-deck" class="col">
    <svg id="map" viewBox="0 0 640 280"><g id="dy"></g></svg>
    <div id="btl"></div><div id="pend"></div>
-   <div class="card" id="expcard" data-win="exp" hidden><h2>원정</h2><div id="exp"></div></div>
    <div class="card" id="actcard"><h2>행동</h2><div id="prog"></div><div id="acts"></div><div id="bw" hidden class="grp" style="margin-top:10px"><div class="gt">병 편지</div><input id="btx" maxlength="60" placeholder="바다에 띄울 짧은 편지 (60자)" style="width:100%"><select id="bgift" hidden style="width:100%;margin-top:6px"></select><div style="margin-top:6px"><button class="pri" onclick="sendBottle()">던진다 (3분)</button><button onclick="$('bw').hidden=true">닫기</button></div></div></div>
    <div class="card" id="seacard" data-win="sea"><h2>바다 <span class="sub" id="seat"></span></h2><canvas id="sea" height="140"></canvas></div>
    <div class="card" data-win="log"><h2>기록</h2><div id="log" class="lg"></div></div>
@@ -51,8 +48,8 @@
   <div class="col" id="rcol">
    <div id="gd" hidden></div>
    <div class="card" data-win="crew"><h2>함께하는 선원</h2><div id="crewinfo"></div></div>
+   <div class="card" id="qcard" data-win="qtrk"><h2>퀘스트</h2><div id="qst"></div></div>
    <div class="card" data-win="chat"><h2>채팅</h2><div id="chl" class="sub sm lg"></div><input id="ct" maxlength="80" placeholder="말을 입력하고 Enter" style="width:100%;margin-top:6px"></div>
-   <div class="card" id="qcard" data-win="qtrk"><h2>추적 중인 퀘스트</h2><div id="qst"></div></div>
   </div>
  </div>
 </div>
