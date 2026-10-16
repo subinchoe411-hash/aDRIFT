@@ -127,6 +127,16 @@ const TODN={day:"낮",dusk:"저녁",dawn:"새벽",night:"밤"},TODI={day:"日",d
 /* 시간은 한국 시각(KST)을 그대로 쓴다: 서버 시각 기준이라 모두가 같은 시간대를 산다 */
 const HRF=()=>{const d=new Date(Date.now()+((window.Online&&Online.off)||0)+9*36e5);return d.getUTCHours()+d.getUTCMinutes()/60+d.getUTCSeconds()/3600};
 
+/* ===== 연출: 큰 사건은 배너와 효과음으로 (효과음은 코드로 합성하므로 파일·용량 비용이 없다) ===== */
+let AC=null;
+const muted=()=>{try{return localStorage.getItem("adrift.mute")==="1"}catch(e){return false}};
+function snd(k){if(muted())return;try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();
+ const N={ok:[[660,0,.12],[880,.12,.22]],relic:[[523,0,.1],[659,.1,.1],[784,.2,.1],[1047,.3,.35]],bad:[[220,0,.22],[165,.22,.35]],warn:[[440,0,.1],[440,.2,.1]],lvl:[[392,0,.1],[523,.1,.1],[659,.2,.25]],coin:[[988,0,.06],[1319,.06,.16]]}[k]||[],t0=AC.currentTime;
+ N.forEach(([f,d,l])=>{const o=AC.createOscillator(),g=AC.createGain();o.type="triangle";o.frequency.value=f;g.gain.setValueAtTime(.0001,t0+d);g.gain.exponentialRampToValueAtTime(.12,t0+d+.02);g.gain.exponentialRampToValueAtTime(.0001,t0+d+l);o.connect(g);g.connect(AC.destination);o.start(t0+d);o.stop(t0+d+l+.05)})}catch(e){}}
+function fxBig(title,sub,kind){kind=kind||"ok";snd(kind==="new"?"ok":kind);let b=$("toastbox");if(!b){b=document.createElement("div");b.id="toastbox";document.body.appendChild(b)}
+ const d=document.createElement("div");d.className="toast "+kind;d.innerHTML=`<b>${esc(title)}</b>${sub?`<span>${esc(sub)}</span>`:""}`;b.appendChild(d);while(b.children.length>3)b.firstChild.remove();setTimeout(()=>d.remove(),3200)}
+function toggleMute(){try{localStorage.setItem("adrift.mute",muted()?"0":"1")}catch(e){}if(!muted())snd("ok");const e=$("mutebtn");if(e)e.textContent=muted()?"소리 켜기":"소리 끄기"}
+
 /* ===== 한국 시각이 정하는 세계 =====
    서버 시각(KST)의 날짜·주를 씨앗으로 계산하므로 서버 저장 없이 모두가 같은 세계를 본다.
    요일마다 시세가 달라지고, 어떤 섬은 밤에만 모습을 드러내며, 주마다 바다의 분위기(주간 이벤트)가 바뀐다. */
@@ -416,7 +426,7 @@ function itemInfo(k){const wp=WEP[k],am=ARM[k],jk=JUNK[k];let h;
 /* ================= 숙련 레벨 / 상태 효과 ================= */
 const lvOf=x=>Math.min(10,Math.floor(Math.sqrt(x/12))+1),LVN={cook:"요리",fight:"전투",med:"의료",fix:"정비"};
 const lv=k=>lvOf((S.xp&&S.xp[k])||0);
-function addXp(k,n){const a=lv(k);S.xp[k]=(S.xp[k]||0)+n;const b=lv(k);if(b>a)say(`${LVN[k]} 숙련도가 ${b}레벨이 되었다!`)}
+function addXp(k,n){const a=lv(k);S.xp[k]=(S.xp[k]||0)+n;const b=lv(k);if(b>a){say(`${LVN[k]} 숙련도가 ${b}레벨이 되었다!`);fxBig("숙련 상승",`${LVN[k]} ${b}레벨`,"lvl")}}
 const EFX={날섬:{g:1,d:"무기를 갈아 두었다. 전투 공격력이 오른다.",m:{atk:2},r:0},부상:{g:0,d:"다쳤다. 낚시와 잠수가 둔해지고 체력이 더 이상 차오르지 않는다.",m:{dive:-.2,fish:-.1},r:-.035},독:{g:0,d:"독이 퍼진다. 체력이 서서히 닳는다.",m:{},r:-.1},행복:{g:1,d:"기분이 좋다. 행운과 낚시 솜씨가 오르고 체력이 천천히 찬다.",m:{luck:.1,fish:.1},r:.03},포만:{g:1,d:"배가 든든하다. 허기가 천천히 닳는다.",m:{hun:-.3},r:0},취기:{g:0,d:"알딸딸하다. 흥정은 잘 되지만 시야가 흐리다.",m:{gold:.08,vis:-1},r:0}};
 const efMod=k=>S.ef.reduce((a,e)=>a+(((EFX[e.id]||{}).m||{})[k]||0),0);
 function addEf(id,min){const d=EFX[id];if(!d)return;if(!d.g)min=Math.max(30,Math.round(min*(1-.05*(lv("med")-1))));const e=S.ef.find(x=>x.id===id),u=S.t+min;if(e)e.until=Math.max(e.until,u);else S.ef.push({id,until:u})}
@@ -688,7 +698,7 @@ const clock=()=>{const x=HRF(),hh=Math.floor(x),mm=Math.floor((x%1)*60);return `
 const say=m=>{if(!S)return;S.logs.unshift(`<div>${clock()} ${m}</div>`);S.logs.length=Math.min(S.logs.length,60);["log","log2","log3"].forEach(i=>{if($(i))$(i).innerHTML=S.logs.join("")})};
 const flush=()=>{if(LD){say(LD);LD=""}};
 function add(k,n=1){const r=capI()-tot(S.inv),a=Math.max(0,Math.min(n,r));if(a){S.inv[k]=(S.inv[k]||0)+a;if(S.voy)S.voy.loot[k]=(S.voy.loot[k]||0)+a}let b=n-a;if(b>0){const s=Math.max(0,Math.min(b,capS()-tot(S.sto)));if(s){S.sto[k]=(S.sto[k]||0)+s;b-=s;say("짐이 가득 차 "+k+" "+s+"개를 창고로 보냈다.")}if(b>0)say(k+" "+b+"개는 둘 곳이 없어 버렸다.")}}
-function art(){const u=ARTS.filter(a=>!S.dex.has(a[0])),a=pick(u.length?u:ARTS);S.dex.add(a[0]);add(a[0]);LD="「"+a[0]+"」 — "+a[1];return "유물 「"+a[0]+"」"}
+function art(){const u=ARTS.filter(a=>!S.dex.has(a[0])),a=pick(u.length?u:ARTS);S.dex.add(a[0]);add(a[0]);LD="「"+a[0]+"」 — "+a[1];fxBig("유물 발견",a[0],"relic");return "유물 「"+a[0]+"」"}
 function rrec(){const u=RC.filter(r=>!S.known.has(r.n));if(!u.length)return"";const r=pick(u);S.known.add(r.n);return "레시피 "+r.n+"("+r.i.join("+")+")"}
 function fx(f){const o=[];f.split(";").forEach(e=>{const[a,b,c]=e.split(":");
  if(a==="g"){const v=Math.round(+b*(+b>0?(1+M("gold"))*dfx().gold:1));S.gold=Math.max(0,S.gold+v);o.push("골드 "+(v>0?"+":"")+v)}
@@ -821,7 +831,7 @@ function tick(dt){S.t+=dt;S.hun=Math.max(OFFL?Math.min(S.hun,15):0,S.hun-dt/6*(1
  normS();
  discover();
  if(S.man&&S.sail&&S.sl>idealSail()&&S.ws>1.3){S.hull-=dt*.12;if(S.t-S.sm>45){S.sm=S.t;say("강풍에 돛이 비명을 지른다! 돛을 줄이자.")}}
- const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&islOpen(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
+ const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&islOpen(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t;fxBig("새로운 섬",nw>1?nw+"곳의 윤곽이 보인다":"수평선 너머로 윤곽이 보인다","new")}renderAll()}}
  const dk=S.sail?-1:I.findIndex((w,i)=>islOpen(i)&&TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
  expTick(dt);
  if(S.act){S.act.l-=dt;if(S.act.fl){const q=S.act.l/(S.act.t||1);S.act.fl.forEach(f=>{if(!f.d&&q<=f.at){f.d=1;say(f.t);f.f&&f.f()}})}if(S.act.l<=0){const f=S.act.fn;S.act=null;f();renderAll()}}
@@ -837,7 +847,7 @@ function live(){const h=Math.max(0,S.hull);
  $("hd").textContent=Math.round(S.hd)+"°";$("kn").textContent=S.sail?kn().toFixed(1)+" 노트":"—";$("wd").textContent=D8[Math.round(((S.wind+180)%360)/45)%8]+"풍";$("ws").textContent=(S.ws<.85?"약함":S.ws<1.2?"보통":"강함")+" "+S.ws.toFixed(1);$("wa").textContent=S.man?wlabel()+" "+Math.round(sEff(wa())*100)+"%":wlabel();
  const d=S.tx===null?null:remD(),m=d===null?null:d/kn()*60;
  $("ds").textContent=d===null?"—":d.toFixed(1)+" 해리";$("eta").textContent=m===null?"—":Math.floor(m/60)+"시간 "+Math.round(m%60)+"분";
-rExp();
+rExp();{const mb=$("mutebtn");if(mb)mb.textContent=muted()?"소리 켜기":"소리 끄기"}
  if(S.view!=="deck")return;
  let s=`<g transform="translate(${VW/2-S.x*K},${VH/2-S.y*K})"><g stroke="var(--line)" stroke-width=".5">`;
  for(let gx=Math.floor((S.x-16)/5)*5;gx<S.x+16;gx+=5)s+=`<line x1="${gx*K}" y1="${(S.y-12)*K}" x2="${gx*K}" y2="${(S.y+12)*K}"/>`;

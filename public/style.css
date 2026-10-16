@@ -158,3 +158,9 @@ a{color:var(--acc2);text-decoration:underline}
 .waves{width:min(360px,80vw);height:14px;margin:12px auto;border:0;cursor:default;color:var(--sub)}
 @media(max-width:820px){.dk{grid-template-columns:1fr;padding:12px}#sky{height:34px}#rt nav{padding:8px 8px 0}#side{border-right:0;border-bottom:3px double var(--line);background:var(--bg2)}#title h1{font-size:30px}.c{padding-top:70px}}
 #sky #skyw{position:relative;z-index:2;margin-right:auto;font-size:11px;letter-spacing:.1em;background:var(--card);border:1px solid var(--line);border-radius:3px;padding:1px 8px;color:var(--acc2)}
+/* 큰 사건 배너 */
+#toastbox{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:40;display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none;max-width:92vw}
+.toast{background:var(--card);border:1px solid var(--acc2);border-left:5px solid var(--acc2);border-radius:3px;padding:8px 18px;box-shadow:0 6px 18px -8px var(--shadow);display:flex;flex-direction:column;align-items:center;animation:tin .28s ease-out,tout .4s 2.7s ease-in forwards}
+.toast b{font-size:15px;letter-spacing:.1em}.toast span{font-size:12px;color:var(--sub)}
+.toast.relic{border-color:var(--acc);border-left-color:var(--acc)}.toast.bad{border-color:var(--warn);border-left-color:var(--warn)}.toast.warn{border-color:var(--acc);border-left-color:var(--warn)}.toast.lvl{border-color:var(--acc2)}
+@keyframes tin{from{opacity:0;transform:translateY(-10px) scale(.96)}to{opacity:1;transform:none}}@keyframes tout{to{opacity:0;transform:translateY(-6px)}}
