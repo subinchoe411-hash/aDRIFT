@@ -10,7 +10,7 @@ const T=[["노련한 낚시꾼",2,"fish:.3"],["매의 눈",2,"vis:3"],["타고�
 const STATS=["근력","민첩","지력","관찰","체력","매력","행운"],SD={근력:"잠수·선체·짐 용량",민첩:"낚시·속력·사냥",지력:"요리 효과",관찰:"시야·탐사",체력:"허기·잠수",매력:"골드 수익",행운:"좋은 사건"};
 let C={name:"",st:Object.fromEntries(STATS.map(s=>[s,3])),pts:12,tr:new Set()},S,LD="";
 function M(k){let v=0;C.tr.forEach(i=>v+=T[i].e[k]||0);const s=C.st;
- return v+({fish:(s.민첩-3)*.05,exp:(s.관찰-3)*.4,vis:(s.관찰-3)*.5,spd:(s.민첩-3)*.05,cook:(s.지력-3)*.05,hun:-(s.체력-3)*.04,hull:(s.근력-3)*.03,gold:(s.매력-3)*.04,dive:(s.근력-3)*.04+(s.체력-3)*.03,luck:(s.행운-3)*.04}[k]||0)+(S&&S.buff&&S.t<S.buff.until&&k==="luck"?S.buff.v:0)+(S&&S.ef?efMod(k):0)+(S&&S.xp&&k==="cook"?.03*(lv("cook")-1):0)}
+ return v+({fish:(s.민첩-3)*.05,exp:(s.관찰-3)*.4,vis:(s.관찰-3)*.5,spd:(s.민첩-3)*.05,cook:(s.지력-3)*.05,hun:-(s.체력-3)*.04,hull:(s.근력-3)*.03,gold:(s.매력-3)*.04,dive:(s.근력-3)*.04+(s.체력-3)*.03,luck:(s.행운-3)*.04}[k]||0)+(S&&S.buff&&S.t<S.buff.until&&k==="luck"?S.buff.v:0)+(S&&S.ef?efMod(k):0)+(S&&S.xp&&k==="cook"?.03*(lv("cook")-1):0)+wkMod(k)}
 const show=i=>{["title","create","game"].forEach(x=>$(x).hidden=x!==i)};
 const bud=()=>5-[...C.tr].reduce((a,i)=>a+T[i].c,0);
 function tl(p){return T.map((t,i)=>[t,i]).filter(([t])=>p?t.c>0:t.c<0).map(([t,i])=>`<button class="${C.tr.has(i)?"on":""}" onclick="tt(${i})"><b>${t.n}</b> ${t.c>0?"소모":"환급"} ${Math.abs(t.c)}<br><span class="sub">${eff(t.e)}</span></button>`).join("")}
@@ -126,9 +126,26 @@ function todOf(h){h=((h%24)+24)%24;return h>=7&&h<17?"day":h>=17&&h<21?"dusk":h>
 const TODN={day:"낮",dusk:"저녁",dawn:"새벽",night:"밤"},TODI={day:"日",dusk:"夕",dawn:"曉",night:"夜"};
 /* 시간은 한국 시각(KST)을 그대로 쓴다: 서버 시각 기준이라 모두가 같은 시간대를 산다 */
 const HRF=()=>{const d=new Date(Date.now()+((window.Online&&Online.off)||0)+9*36e5);return d.getUTCHours()+d.getUTCMinutes()/60+d.getUTCSeconds()/3600};
+
+/* ===== 한국 시각이 정하는 세계 =====
+   서버 시각(KST)의 날짜·주를 씨앗으로 계산하므로 서버 저장 없이 모두가 같은 세계를 본다.
+   요일마다 시세가 달라지고, 어떤 섬은 밤에만 모습을 드러내며, 주마다 바다의 분위기(주간 이벤트)가 바뀐다. */
+const KSTD=()=>{const t=Date.now()+((window.Online&&Online.off)||0)+9*36e5,d=Math.floor(t/864e5);return{day:d,week:Math.floor((d+3)/7)}};
+const hsh=(a,b)=>{let h=(Math.imul(a|0,374761393)+Math.imul(b|0,668265263)+0x9e3779b9)|0;h=Math.imul(h^(h>>>13),1274126177);h^=h>>>16;return(h>>>0)/4294967296};
+const strH=s=>{let h=7;for(let i=0;i<s.length;i++)h=(Math.imul(h,31)+s.charCodeAt(i))|0;return Math.abs(h)};
+const dayM=(i,k)=>Math.round((.78+.55*hsh(KSTD().day,i*977+strH(k)))*100)/100;
+const pm=(w,k)=>w.m*dayM(I.indexOf(w),k);
+const trendMark=m=>m>=1.15?"▲":m<=.9?"▼":"";
+const WKE=[{n:"풍어 주간",d:"바다가 풍성하다. 낚시 수확 +30%",m:{fish:.3}},{n:"순풍 주간",d:"바람이 도와준다. 속력 +0.5",m:{spd:.5}},{n:"폭풍 주간",d:"파도가 거칠다. 선체 피해가 커지지만 행운 +10%",m:{hull:-.2,luck:.1}},{n:"안개 주간",d:"시야 -2, 하지만 숨은 것이 많다 (탐사 +1.5)",m:{vis:-2,exp:1.5}},{n:"축제 주간",d:"항구마다 활기가 넘친다. 골드 수익 +15%",m:{gold:.15}},{n:"보름달 주간",d:"밤이 환하다. 행운 +8%, 시야 +1",m:{luck:.08,vis:1}}];
+let _wk={w:-1,e:null};
+const weekEv=()=>{const w=KSTD().week;if(_wk.w!==w){_wk={w,e:WKE[Math.floor(hsh(w,1234)*WKE.length)]}}return _wk.e};
+const wkMod=k=>weekEv().m[k]||0;
+const nightIsle=i=>i>0&&hsh(555,i)<.12;
+const islOpen=i=>!nightIsle(i)||todOf(HRF())==="night";
 function applyTod(h){h=h==null?HRF():h;const t=todOf(h);if(window._tod!==t){window._tod=t;document.documentElement.setAttribute("data-tod",t)}
  const sk=$("sky");if(!sk)return;const sun=h>=6&&h<18,x=sun?(h-6)/12:(((h-18)+24)%24)/12;sk.dataset.orb=sun?"sun":"moon";sk.dataset.tod=t;
  sk.style.setProperty("--sx",(6+x*88).toFixed(1)+"%");sk.style.setProperty("--sy",(82-62*Math.sin(Math.PI*Math.min(1,Math.max(0,x)))).toFixed(0)+"%");
+ const wl=$("skyw");if(wl){const e=weekEv();wl.textContent=e.n;wl.title=e.d}
  const lb=$("skyt");if(lb){const hh=Math.floor(h),mm=Math.floor((h%1)*60);lb.textContent=`${TODN[t]} ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")}`}}
 function sc(id){if(!SC[id])return;const s=SC[id],g=S.gh;S.scId=id;
  const hd=(s.gh&&g?` [단서 ${g.c} · 공포 ${g.e}]`:"")+(s.dv&&S.inC?` [남은 산소 ${Math.max(0,S.air)}]`:"");
@@ -636,7 +653,7 @@ function tavDrink(){if(S.gold<10)return;S.gold-=10;addEf("취기",180);say("술 
 function buyEq(k){const v=WEP[k]||ARM[k],p=Math.ceil(v[1]*wI().m*bm());if(S.gold<p)return say("골드가 모자란다.");S.gold-=p;add(k);say(k+"을(를) 샀다. 소지품에서 장착할 수 있다.");renderAll()}
 function cure(){if(S.gold<30)return;S.gold-=30;S.hp=hpm();S.ef=S.ef.filter(e=>EFX[e.id].g);addXp("med",2);say("의원에서 치료를 받았다. 체력이 가득 찼고 나쁜 효과가 사라졌다. (의료 경험 +2)");renderAll()}
 function study(){if(S.gold<20||S.act)return;S.gold-=20;start("의술 견학",36,()=>{addXp("med",6);say("의사의 곁에서 환자를 돌보는 법을 배웠다. (의료 경험 +6)")})}
-function marketHTML(w){return `<h2>시장 (시세 ×${w.m.toFixed(2)})</h2><div class="two"><div><h3>구매</h3>`+Object.keys(PRICE).map(k=>bt(`${k} ${Math.ceil(PRICE[k]*w.m*bm())}G`,`buy('${k}')`)).join("")+`</div><div><h3>판매</h3>`+(Object.keys(S.inv).filter(k=>S.inv[k]>0&&!k.startsWith("포박된")).map(k=>`<div class="row"><span>${k} ×${S.inv[k]}</span><a onclick="sell('${k}')">팔기 ${pr(k)}G</a></div>`).join("")||"<div class='sub'>팔 물건이 없다.</div>")+`</div></div>`}
+function marketHTML(w){return `<h2>시장 (오늘의 시세 ×${w.m.toFixed(2)})</h2><div class="sub sm">시세는 한국 시각으로 하루마다 바뀐다. ▲는 오늘 비싼 물건, ▼는 오늘 싼 물건.</div><div class="two"><div><h3>구매</h3>`+Object.keys(PRICE).map(k=>{const dm=dayM(I.indexOf(w),k);return bt(`${k} ${Math.ceil(PRICE[k]*w.m*dm*bm())}G${trendMark(dm)}`,`buy('${k}')`)}).join("")+`</div><div><h3>판매</h3>`+(Object.keys(S.inv).filter(k=>S.inv[k]>0&&!k.startsWith("포박된")).map(k=>`<div class="row"><span>${k} ×${S.inv[k]}</span><a onclick="sell('${k}')">팔기 ${pr(k)}G</a></div>`).join("")||"<div class='sub'>팔 물건이 없다.</div>")+`</div></div>`}
 function smithyHTML(w){const row=(k,v,t)=>`<div class="row"><span><b>${k}</b> <span class="sub sm">${t==="w"?"공격 +":"방어 +"}${v[0]} · ${v[2]}</span></span><span>${S.inv[k]>0?'<span class="sub sm">보유</span>':bt(Math.ceil(v[1]*w.m*bm())+"G","buyEq('"+k+"')")}</span></div>`;return `<h2>대장간</h2><div class="sub sm">산 장비는 소지품에서 장착한다.</div>`+bt("무기 연마 (20분 · 공격력 +2, 6시간)","sharpen()",!!S.act||!S.eq.w)+Object.entries(WEP).map(([k,v])=>row(k,v,"w")).join("")+Object.entries(ARM).map(([k,v])=>row(k,v,"a")).join("")}
 function clinicHTML(z){const bad=S.ef.some(e=>!EFX[e.id].g);return `<h2>의원</h2><div class="sub sm">의사가 환자를 돌보고 있다. 의술 견학을 하면 의료 숙련도가 오른다.</div>`+bt("치료받기 (30G · 체력 전부, 나쁜 효과 제거)","cure()",S.gold<30||(S.hp>=hpm()&&!bad))+bt("의술 견학 (20G · 60분)","study()",S.gold<20||z)+bt("붕대 조제 (약초 2개 · 15분)","brew('붕대')",z||!(S.inv.약초>=2)||lv("med")<3)+bt("해독제 조제 (약초+소금 · 15분)","brew('해독제')",z||!(S.inv.약초>=1&&S.inv.소금>=1)||lv("med")<4)+`<div class="sub sm">조제는 의료 Lv 3부터(해독제는 4부터)</div>`+`<div class="sub sm">의료 Lv ${lv("med")} — 치료 효과 +${(lv("med")-1)*12}%, 나쁜 효과 시간 −${(lv("med")-1)*5}%</div>`}
 function yardHTML(w){const nx=SH[S.lv+1],c=Math.ceil((hm()-S.hull)*2*(w.sp==="조선"?.5:1));return `<h2>조선소</h2><div class="sub sm">현재 배: ${SH[S.lv].n} · 선체 ${Math.round(S.hull)}/${hm()}${w.sp==="조선"?" · 장인촌 할인 적용":""}</div>`+(nx?bt(`${nx.n}(으)로 개조 ${yc(nx)}G`,"up()",S.gold<yc(nx)):"<div class='sub'>최대 단계다.</div>")+bt(`선체 정비 (40분 · ${c}G)`,"refit()",c<=0||S.gold<c||!!S.act)}
@@ -727,9 +744,9 @@ function rest(){if(S.hun<15)return say("배가 너무 고파 쉴 수가 없다."
 function eatBest(){const k=Object.keys(S.inv).filter(k=>S.inv[k]>0&&EDI(k)).sort((a,b)=>BV[b]-BV[a])[0];k?eat(k):say("먹을 것이 없다.")}
 function mv(k,n,to){const a=to==="s"?S.inv:S.sto,b=to==="s"?S.sto:S.inv,room=(to==="s"?capS()-tot(S.sto):capI()-tot(S.inv));n=n==="all"?a[k]:Math.min(n,a[k]);n=Math.min(n,room);if(n<=0)return say("자리가 모자라다.");a[k]-=n;b[k]=(b[k]||0)+n;renderAll()}
 const wI=()=>I[S.isl];
-const pr=k=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*wI().m*(1+M("gold"))*repM()));
+const pr=k=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*pm(wI(),k)*(1+M("gold"))*repM()));
 function sell(k){if(!(S.inv[k]>0)||k.startsWith("포박된"))return;const p=pr(k);S.inv[k]--;ct("sell");S.gold+=p;say(k+"을(를) "+p+"골드에 팔았다.");renderAll()}
-function buy(k){const p=Math.ceil(PRICE[k]*wI().m*bm());if(S.gold<p)return say("골드가 모자란다.");S.gold-=p;add(k);renderAll()}
+function buy(k){const p=Math.ceil(PRICE[k]*pm(wI(),k)*bm());if(S.gold<p)return say("골드가 모자란다.");S.gold-=p;add(k);renderAll()}
 function up(){const n=SH[S.lv+1];if(!n||S.gold<yc(n))return say("골드가 모자라거나 이미 최대 단계다.");S.gold-=yc(n);S.lv++;S.hull=hm();say("배를 「"+n.n+"」(으)로 개조했다!");renderAll()}
 function land(){if(S.dk<0)return;const e=entry(S.dk);if(e.deny&&S.pass!==S.dk){say(e.why+". 벌금 "+e.fine+"골드를 내면 입장할 수 있다.");return renderAll()}S.isl=S.dk;const w=wI();w.v=1;w.k=1;S.view="island";S.mk=0;S.bb=0;S.bjo=0;S.bld="dock";S.spot="dock";say(`${w.n}에 상륙했다. ${TD[w.t]}`);renderAll()}
 function leave(){if(S.bj&&S.bj.ph==="play")return say("진행 중인 블랙잭 판을 끝내야 한다.");S.pass=-1;S.isl=null;S.view="deck";say("배로 돌아왔다.");renderAll()}
@@ -804,8 +821,8 @@ function tick(dt){S.t+=dt;S.hun=Math.max(OFFL?Math.min(S.hun,15):0,S.hun-dt/6*(1
  normS();
  discover();
  if(S.man&&S.sail&&S.sl>idealSail()&&S.ws>1.3){S.hull-=dt*.12;if(S.t-S.sm>45){S.sm=S.t;say("강풍에 돛이 비명을 지른다! 돛을 줄이자.")}}
- const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
- const dk=S.sail?-1:I.findIndex(w=>TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
+ const v=vis();{let nw=0;I.forEach((w,i)=>{if(!S.seen.has(i)&&islOpen(i)&&TD2(w.x,w.y,S.x,S.y)-w.rm<=v){S.seen.add(i);nw++}});if(nw){if(S.t-(S.lsg==null?-999:S.lsg)>=180){say(nw>1?`수평선 너머로 낯선 섬 ${nw}곳의 윤곽이 보이기 시작한다.`:"수평선 너머로 낯선 섬의 윤곽이 보이기 시작한다.");S.lsg=S.t}renderAll()}}
+ const dk=S.sail?-1:I.findIndex((w,i)=>islOpen(i)&&TD2(w.dx,w.dy,S.x,S.y)<.4);if(dk!==S.dk){S.dk=dk;if(dk>=0){I[dk].k=1;say(I[dk].n+" 부두에 닻을 내렸다. 상륙할 수 있다.")};renderAll()}
  expTick(dt);
  if(S.act){S.act.l-=dt;if(S.act.fl){const q=S.act.l/(S.act.t||1);S.act.fl.forEach(f=>{if(!f.d&&q<=f.at){f.d=1;say(f.t);f.f&&f.f()}})}if(S.act.l<=0){const f=S.act.fn;S.act=null;f();renderAll()}}
  S.acc+=dt;while(S.acc>=60){S.acc-=60;if(!OFFL)event()}S.acc2+=dt;while(S.acc2>=10){S.acc2-=10;if(!OFFL)small()}
@@ -828,7 +845,7 @@ rExp();
  const vv=vis();I.forEach((w,i)=>{if(!S.seen.has(i))return;const dx=dl(w.x-S.x,WW),dy=dl(w.y-S.y,WH);if(Math.abs(dx)>VW/2/K+w.rm+1||Math.abs(dy)>VH/2/K+w.rm+1)return;const ox=Math.round((S.x+dx-w.x)/WW)*WW*K,oy=Math.round((S.y+dy-w.y)/WH)*WH*K,dd=Math.hypot(dx,dy),op=dd-w.rm<=vv?1:.6;
   if(!w.k&&!w.v){s+=`<g transform="translate(${ox},${oy})" opacity="${op*.7}"><path d="${w.p2}" fill="var(--sh)"/><path d="${w.p}" fill="var(--land)" stroke="var(--line)" stroke-dasharray="3 3"/></g>`;return}
   const na=Math.max(.3,Math.min(1,1.2-dd/(vv*1.2)));
-  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="var(--sh)"/><path d="${w.p}" fill="var(--land)" stroke="var(--sub)" stroke-width="1"/><path d="${w.p3}" fill="var(--hi)"/>${w.v?`<circle cx="${w.dx*K}" cy="${w.dy*K}" r="3" fill="var(--acc)"/>`:""}<text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.sp&&w.v?"★ ":""}${w.n}${w.v?" · "+w.t:""}</text></g>`});
+  s+=`<g transform="translate(${ox},${oy})" opacity="${op}"><path d="${w.p2}" fill="var(--sh)"/><path d="${w.p}" fill="var(--land)" stroke="var(--sub)" stroke-width="1"/><path d="${w.p3}" fill="var(--hi)"/>${w.v?`<circle cx="${w.dx*K}" cy="${w.dy*K}" r="3" fill="var(--acc)"/>`:""}<text x="${w.x*K}" y="${w.y*K+3}" font-size="${na>.7?10:9}" text-anchor="middle" fill="${na>.7?"var(--ink)":"var(--sub)"}" fill-opacity="${na}">${w.sp&&w.v?"★ ":""}${w.n}${w.v?" · "+w.t:""}${w.v&&nightIsle(i)?" ☾":""}</text></g>`});
  CUR.forEach((c,i)=>{if(!S.cs.has(i)||curDist(c,S.x,S.y)>VW/2/K+2)return;const ux=Math.sin(rad(c.ang)),uy=-Math.cos(rad(c.ang)),sx=S.x+dl(c.x-S.x,WW),sy=S.y+dl(c.y-S.y,WH),ex=sx+ux*c.len,ey=sy+uy*c.len;s+=`<line x1="${sx*K}" y1="${sy*K}" x2="${ex*K}" y2="${ey*K}" stroke="var(--acc)" stroke-opacity=".1" stroke-width="${c.w*K}" stroke-linecap="round"/>`;for(let t=1.5;t<c.len;t+=3)s+=`<path d="M-5,-4 L0,0 L-5,4" transform="translate(${(sx+ux*t)*K},${(sy+uy*t)*K}) rotate(${Math.atan2(uy,ux)*180/Math.PI})" fill="none" stroke="var(--acc)" stroke-opacity=".55"/>`});
  REEF.forEach((r,i)=>{if(!S.rs.has(i))return;const rx=S.x+dl(r.x-S.x,WW),ry=S.y+dl(r.y-S.y,WH);if(Math.abs(rx-S.x)>VW/2/K+r.r||Math.abs(ry-S.y)>VH/2/K+r.r)return;s+=`<circle cx="${rx*K}" cy="${ry*K}" r="${r.r*K}" fill="var(--warn)" fill-opacity=".07" stroke="var(--warn)" stroke-opacity=".6" stroke-dasharray="3 4"/><text x="${rx*K}" y="${ry*K+3}" font-size="9" text-anchor="middle" fill="var(--warn)">암초</text>`});
  PO.forEach(p=>{if(p.d||(!p.f&&!p.h))return;const px=(S.x+dl(p.x-S.x,WW))*K,py=(S.y+dl(p.y-S.y,WH))*K;s+=p.f?`<text x="${px}" y="${py}" font-size="12" text-anchor="middle" fill="var(--warn)">${p.t==="도시"?"◎":p.t==="수배"?"⚑":p.t==="전설"?"★":"◆"}</text><text x="${px}" y="${py+11}" font-size="7" text-anchor="middle" fill="var(--sub)">${p.n}</text>`:`<text x="${px}" y="${py}" font-size="13" text-anchor="middle" fill="var(--acc)">?</text>`});

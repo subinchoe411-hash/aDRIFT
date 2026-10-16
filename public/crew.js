@@ -338,7 +338,7 @@ function islandTab(){
  el.innerHTML=`<h2 style="margin-top:0">${esc(w.n)} <span class="sub">· ${esc(w.t)}</span></h2><div class="sub sm" style="margin:6px 0">선장이 이곳에 상륙해 있다. 밝은 표식이 지금 내가 있는 곳이다. 다른 곳은 눌러서 걸어가야 하고, 걷는 데 시간이 든다. 얻은 물건은 내 사물함에 담긴다.</div>`+map+`<div class="card" style="margin-top:10px">${placeActs(st,w,z)}</div><div id="cprog" style="margin-top:8px"></div><div class="card" style="margin-top:12px"><h2>기록</h2><div class="lg">${crewLog.map(x=>`<div>${esc(x)}</div>`).join("")||"<div>(기록 없음)</div>"}</div></div>`;
  cTick()}
 O.cdo=(kind,name,key)=>cDo(kind,name,key);
-const cpr=(k,w)=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*(w?w.m:1)*(1+M("gold"))));
+const cpr=(k,w)=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*(w?pm(w,k):1)*(1+M("gold"))));
 O.csell=k=>{const st=isState();if(!st||!(cs.bag[k]>0))return;const p=cpr(k,I[st.i]);bagTake(k,1);cs.gold=Math.min(1e8,(cs.gold||0)+p);cs.ct.earn+=p;cs.ct.sell++;dirty();cNote(`${k}${jo(k,"을(를)")} ${p}골드에 팔았다.`);render()};
 O.collect=()=>act(async()=>{const r=await O.api("/crew/collect",{});cs.gold=Math.min(1e8,(cs.gold||0)+r.gold);cs.ct.earn+=r.gold;dirty();cNote(`쌓인 월급 ${r.gold}G를 지갑에 넣었다.`)});
 function go(t){tab=t;document.querySelectorAll("#tabs button").forEach(b=>b.className=b.dataset.t===t?"on":"");render()}
