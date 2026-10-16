@@ -28,12 +28,14 @@ const Home=(()=>{
   ["kit","주방","큰 화덕에서 요리한다",'<path d="M7 14V9a3 3 0 015-2 3 3 0 015 2v5zM7 14v6h10v-6"/>'],
   ["sto","창고","배와 함께 쓰는 공유 창고",'<path d="M3 8l9-4 9 4v12H3zM3 8l9 4 9-4M12 12v8"/>'],
   ["work","작업대","배를 고치고 키운다",'<path d="M14 6l4 4-9 9H5v-4zM12 8l4 4M16 4l4 4"/>'],
+  ["cab","선장실","캐릭터·칭호·장비를 본다",'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/>'],
   ["map","해도실","출항 계획을 세운다",'<path d="M9 4l-6 2v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14"/>'],
   ["mail","우편함","병 편지가 도착한다",'<path d="M3 6h18v13H3zM3 7l9 7 9-7"/>'],
   ["well","우물","마실 물을 길어 둔다",'<path d="M5 9h14v11H5zM8 9V6l4-3 4 3v3M12 13v4"/>']];
  let sel="bed",dest="";
  const lv=()=>LV[S&&S.hl?S.hl:1];
- const here=()=>!!S&&!S.over&&(S.isl===S.home||(S.isl===null&&!S.inC&&S.dk===S.home&&!S.sail));
+ const here=()=>!!S&&!S.over&&S.isl!==null&&S.isl===S.home;   // 첫 섬에 상륙해 있을 때
+ const inside=()=>here()&&!!S.inh;                                     // 그중 집 안에 있을 때
  const busy=()=>!!S.act||S.over||!!S.pend||!!S.bt;
  const need=o=>`${o.g}G · 목재 ${o.w}개`;
  function upgrade(){const nx=S.hl+1,o=UP[nx];if(!o||busy())return;if(S.gold<o.g||(S.inv.목재||0)<o.w)return say("증축에 쓸 재료가 모자라다 ("+need(o)+").");S.gold-=o.g;S.inv.목재-=o.w;if(S.inv.목재<=0)delete S.inv.목재;S.hl=nx;ct("house");say(`집을 「${LV[nx].n}」(으)로 키웠다! ${LV[nx].d}`);if(window.fxBig)fxBig("집 증축",LV[nx].n,"relic");renderAll()}
@@ -53,18 +55,20 @@ const Home=(()=>{
   if(k==="map"){const ks=I.map((w,i)=>S.seen.has(i)&&w.k&&i!==S.home?i:-1).filter(i=>i>=0);if(dest===""||!ks.includes(+dest))dest=ks[0]!=null?String(ks[0]):"";
    const sl=`<select onchange="Home.setPick(this.value)">${ks.length?ks.map(i=>`<option value="${i}" ${String(i)===dest?"selected":""}>${esc(I[i].n)}</option>`).join(""):`<option value="">갈 수 있는 섬이 없다</option>`}</select>`;
    return `<div class="sub sm">지난 항해 기록을 펼쳐 놓고 이번 목적지를 고른다. 항로는 지도를 눌러 잡아도 된다.</div><div class="row"><span>원정 횟수</span><span>${S.rec.n}번</span></div><div class="row"><span>항구에서 가장 멀리</span><span>${S.rec.far}해리</span></div><div class="row"><span>발견한 섬</span><span>${S.seen.size}곳</span></div><div style="margin-top:8px">${sl}${bt("출항","Home.depart()",z||!ks.length,1)}</div>`}
+  if(k==="cab")return `<div class="sub sm">나의 능력치와 칭호, 배·장비, 수첩을 본다.</div>`+bt("선장실 열기","S.cab='char';go('cabin')",0,1);
   if(k==="mail")return `<div class="sub sm">받은 병 편지 ${S.mail.length}통.</div>`+bt("편지·도감 열기","S.cab='dex';go('cabin')",0,1);
   if(k==="well")return `<div class="sub sm">맑은 우물. 마시는 건 공짜다. 물통은 한 번에 ${L.water}개씩 채운다.</div>`+bt("물 마시기 (목마름 전부)","Home.sip()",S.thi>=99,1)+bt("물통 채우기 (3분)","Home.fill()",z);
   return ""}
- function render(){const e=document.getElementById("v-home");if(!e)return;if(!here()){e.innerHTML="";return}
+ function render(){const e=document.getElementById("v-home");if(!e)return;if(!inside()){e.innerHTML="";return}
   const L=lv(),nx=UP[S.hl+1],z=busy(),r=RM.find(x=>x[0]===sel)||RM[0];
   const lst=RM.map(([k,n,d,ic])=>`<button class="rr${k===sel?" on":""}" onclick="Home.go('${k}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${ic}</svg><div><b>${n}</b><span>${d}</span></div></button>`).join("");
   const dots=[1,2,3].map(i=>`<i class="${i<=S.hl?"on":""}"></i>`).join("");
   e.innerHTML=`<div class="card"><h2>내 집 <span class="sub">· ${esc(I[S.home].n)} · ${L.n}</span> <span class="hd">${dots}</span></h2><div class="sub sm">${L.d}</div>
    <div class="rl" style="margin-top:10px">${lst}</div></div>
    <div class="card" style="margin-top:14px"><h2>${r[1]}</h2>${room(sel,z)}<div id="prog5"></div></div>
+   <div class="card" style="margin-top:14px"><h2>문밖으로</h2><div class="sub sm">집을 나서면 섬이다. 부두에서 배에 오르면 항해할 수 있다.</div>${bt("집을 나선다","Home.leave()",z,1)}</div>
    <div class="card" style="margin-top:14px"><h2>집 키우기</h2>${nx?`<div class="row"><span>${LV[S.hl+1].n}</span><span class="sub sm">${need(nx)}</span></div><div class="sub sm">${LV[S.hl+1].d} 창고 +${LV[S.hl+1].sto-L.sto}칸, 자는 시간 ${LV[S.hl+1].min}분.</div>`+bt("집 키우기","Home.upgrade()",z||S.gold<nx.g||(S.inv.목재||0)<nx.w,1):`<div class="sub sm">더 키울 수 없는 가장 큰 집이다.</div>`}</div>`}
- return{here,sto:()=>S&&S.hl?LV[S.hl].sto:0,cookY:()=>here()?lv().cook:1,cookMin:()=>here()?lv().cmin:6,kname:()=>lv().k,upgrade,sleep,sip,fill,fix,depart,render,
+ return{here,inside,enter:()=>{if(busy())return;S.inh=true;S.view="home";renderAll()},leave:()=>{if(busy())return;S.inh=false;S.view="island";S.bld="home";renderAll()},sto:()=>S&&S.hl?LV[S.hl].sto:0,cookY:()=>inside()?lv().cook:1,cookMin:()=>inside()?lv().cmin:6,kname:()=>lv().k,upgrade,sleep,sip,fill,fix,depart,render,
   go:k=>{sel=k;renderAll()},setPick:v=>{dest=v}}})();
 
 /* ===== 퀘스트: 받아야 시작되고, 쓰러뜨리듯 한 번에 쏟아지지 않는다 ===== */
@@ -101,7 +105,7 @@ const Q=(()=>{
  const prog=q=>q.o.map(([l,k,th,u])=>{const c=Math.min(th,cv(k));return{l,c:u?Math.floor(c*10)/10:Math.floor(c),th,u:u||"",ok:cv(k)>=th}});
  const ready=q=>prog(q).every(p=>p.ok);
  const unmet=q=>q.req.filter(r=>st(QD[r])!==2);
- const atOk=q=>{const a=q.at;if(a==="any")return true;if(S.inC)return false;if(a==="home")return Home.here();if(a==="town")return S.isl!==null&&(I[S.isl].t==="마을"||S.isl===S.home);return S.isl!==null||S.dk>=0}; /* port: 부두 */
+ const atOk=q=>{const a=q.at;if(a==="any")return true;if(S.inC)return false;if(a==="home")return Home.inside();if(a==="town")return S.isl!==null&&(I[S.isl].t==="마을"||S.isl===S.home);return S.isl!==null||S.dk>=0}; /* port: 부두 */
  const trk=()=>QD.find(x=>x.id===S.qtk&&(st(x)===1||st(x)===3));
  const avail=()=>QD.filter(q=>st(q)===0&&!unmet(q).length);
  const acting=()=>QD.filter(q=>st(q)===1||st(q)===3);
@@ -182,6 +186,15 @@ const Sea=(()=>{
  function start(){setInterval(()=>{if(raf||typeof S==="undefined"||!S||!S.t)return;if(going()&&visible())raf=requestAnimationFrame(frame);else if(visible())draw(performance.now());else dirty=true},400)}
  return{start,mark:()=>{dirty=true}}})();
 
+/* ===== 항해 음악: 항해 중에만 흐른다 (音楽：ユーフルカ https://youfulca.com/) ===== */
+const Bgm=(()=>{let a=null,pend=false;const V=.35;
+ const want=()=>typeof S!=="undefined"&&!!S&&!!S.t&&!!S.sail&&S.isl===null&&!S.inC&&!S.over&&!document.getElementById("game").hidden&&!(window.Online&&Online.crewMode)&&typeof muted==="function"&&!muted();
+ function tick(){if(want()){if(!a){a=new Audio("audio/voyage.mp3");a.loop=true;a.preload="auto";a.volume=0}
+   if(a.paused&&!pend){pend=true;a.play().then(()=>{pend=false}).catch(()=>{pend=false})}   // 사용자가 화면을 누르기 전이면 거절된다 → 다음 틱에 다시
+   if(!a.paused)a.volume=Math.min(V,a.volume+.03)}
+  else if(a&&!a.paused){a.volume=Math.max(0,a.volume-.06);if(a.volume<=.001)a.pause()}}
+ setInterval(tick,250);return{tick,el:()=>a}})();
+
 /* renderAll()/live()가 부르는 훅 */
-function uiRender(){Home.render();Q.track$();Q.render();Sea.mark()}
-window.Win=Win;window.Home=Home;window.Q=Q;window.Sea=Sea;Win.apply();Sea.start();
+function uiRender(){Home.render();if(Home.inside()&&(S.view==="kitchen"||S.view==="cabin")){const e=document.getElementById("v-"+S.view);if(e)e.insertAdjacentHTML("afterbegin",`<div class="backh"><button onclick="go('home')">← 집으로</button></div>`)}Q.track$();Q.render();Sea.mark()}
+window.Win=Win;window.Bgm=Bgm;window.Home=Home;window.Q=Q;window.Sea=Sea;Win.apply();Sea.start();
