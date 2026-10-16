@@ -1,10 +1,10 @@
 /* ===== 청록 해도 — 시간대별 종이 빛깔 (day 낮 / dusk 저녁 / night 밤 / dawn 새벽) ===== */
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-:root,:root[data-tod="day"]{--bg:#f7fbfe;--bg2:#ffffff;--card:#ffffff;--hd:#edf5fb;--ink:#1a3249;--sub:#6a8499;--line:#d3e3ef;--acc:#3a8fd2;--acc2:#2a78b6;--on:#ffffff;--warn:#c4513a;--land:#f0f3ef;--sh:#e8f1f8;--hi:#dde8f0;--sea:#eef6fb;--shadow:rgba(30,80,130,.25);--sky1:#edf5fb;--sky2:#ffffff}
-:root[data-tod="dusk"]{--bg:#fdf7f2;--bg2:#fffdfb;--card:#ffffff;--hd:#f8ebe1;--ink:#3c3047;--sub:#8a7585;--line:#ecd9cd;--acc:#d9703f;--acc2:#5a82b8;--on:#ffffff;--warn:#b8402f;--land:#f3ebde;--sh:#f6e9de;--hi:#ecdccb;--sea:#fbf0e8;--shadow:rgba(140,70,40,.25);--sky1:#f8ebe1;--sky2:#fffdfb}
-:root[data-tod="dawn"]{--bg:#f9f8fe;--bg2:#fefeff;--card:#ffffff;--hd:#efedfa;--ink:#2b3359;--sub:#7a82a6;--line:#dcdaf0;--acc:#6b7fd6;--acc2:#4f86c6;--on:#ffffff;--warn:#bd4a38;--land:#eeeaf0;--sh:#ece9f8;--hi:#e2def2;--sea:#f1f0fb;--shadow:rgba(70,60,140,.25);--sky1:#efedfa;--sky2:#fefeff}
-/* 밤: 별이 빛나는 밤 — 짙은 남색 바탕에 달빛 노랑과 코발트 */
-:root[data-tod="night"]{--bg:#0a1840;--bg2:#0f2358;--card:#132b69;--hd:#1a3a80;--ink:#f6edbf;--sub:#9db6e8;--line:#2b4e9c;--acc:#f7cb4a;--acc2:#78adff;--on:#0a1840;--warn:#ff9c70;--land:#1c3978;--sh:#0e2150;--hi:#274793;--sea:#0d2252;--shadow:rgba(0,5,30,.6);--sky1:#0f2358;--sky2:#1a3a80}
+:root,:root[data-tod="day"]{--bg:#f3f6f8;--bg2:#fbfcfd;--card:#fdfefe;--hd:#e8eef2;--ink:#232f3a;--sub:#74818d;--line:#d9e0e5;--acc:#b98350;--acc2:#3f6f8c;--on:#ffffff;--ok:#5a937a;--warn:#b9654f;--land:#f7f6f1;--sh:#eef2f5;--hi:#dbe4ea;--sea:#e8eef2;--shadow:rgba(30,60,90,.22);--sky1:#e8eef2;--sky2:#fbfcfd}
+:root[data-tod="dusk"]{--bg:#f8f4f1;--bg2:#fcfaf8;--card:#fefcfb;--hd:#f1e8e2;--ink:#3a3039;--sub:#85777f;--line:#e4d8d1;--acc:#c08055;--acc2:#6c7f99;--on:#ffffff;--ok:#6a9a80;--warn:#b5543f;--land:#f4eee6;--sh:#f1e6de;--hi:#e6d9cc;--sea:#f3ebe5;--shadow:rgba(120,70,40,.22);--sky1:#f1e8e2;--sky2:#fcfaf8}
+:root[data-tod="dawn"]{--bg:#f5f5f9;--bg2:#fbfbfd;--card:#fefeff;--hd:#eaebf3;--ink:#2d3350;--sub:#767b9a;--line:#d8dbe8;--acc:#b58a7e;--acc2:#5873a3;--on:#ffffff;--ok:#5f9a85;--warn:#b5543f;--land:#f1eff3;--sh:#ecedf5;--hi:#dfe0ee;--sea:#eef0f7;--shadow:rgba(70,60,120,.22);--sky1:#eaebf3;--sky2:#fbfbfd}
+/* 밤: 눈이 편한 어두운 청회색 바탕에 부드러운 하늘색과 호박색 */
+:root[data-tod="night"]{--bg:#171d25;--bg2:#1c232c;--card:#212a35;--hd:#2a3541;--ink:#e3e8ee;--sub:#97a4b2;--line:#323f4d;--acc:#d8a468;--acc2:#86b3d4;--on:#14202b;--ok:#7cc4a2;--warn:#e69a80;--land:#283441;--sh:#18212b;--hi:#314050;--sea:#1a2530;--shadow:rgba(0,0,0,.5);--sky1:#1c232c;--sky2:#2a3541}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Serif KR","Nanum Myeongjo",Georgia,serif;line-height:1.6;font-size:14px}
 .scr{max-width:780px;margin:0 auto;padding:56px 24px}.c{text-align:center;padding-top:140px}
@@ -114,8 +114,6 @@ a{color:var(--acc2);text-decoration:underline}
 .vh{border-bottom:3px double var(--line)}
 #qst .q{display:flex;gap:8px;align-items:baseline;padding:3px 0;font-size:13px}#qst .q i{font-style:normal;color:var(--acc2);flex:none}#qst .q.done{color:var(--sub);text-decoration:line-through}#qst .q small{color:var(--sub);margin-left:auto;white-space:nowrap}#qst h3{margin:10px 0 3px;letter-spacing:.1em}#qst h3:first-child{margin-top:0}
 #lcol .pan{max-width:none;margin:0;padding:0}
-:root[data-tod="night"] body{background:radial-gradient(circle 120px at 88% 70px,rgba(247,203,74,.38),transparent 70%) fixed,radial-gradient(ellipse 380px 150px at 18% 22%,rgba(60,110,220,.35),transparent 70%) fixed,radial-gradient(ellipse 520px 190px at 62% 55%,rgba(40,90,200,.28),transparent 72%) fixed,radial-gradient(ellipse 420px 160px at 30% 88%,rgba(70,120,230,.22),transparent 70%) fixed,var(--bg)}
-:root[data-tod="night"] #sky[data-tod="night"]::before{filter:drop-shadow(0 0 2px var(--acc))}
 .pan,.dk{animation:fadein .35s ease both}@keyframes fadein{from{opacity:0}to{opacity:1}}
 #map{max-width:none;background:radial-gradient(circle at 50% 50%,var(--sea) 52%,var(--sh) 100%);border:1px solid var(--sub);outline:3px double var(--line);outline-offset:3px;border-radius:2px;box-shadow:none;margin:4px 4px 8px}
 .town{border-radius:2px;border-color:var(--line)}
@@ -164,3 +162,55 @@ a{color:var(--acc2);text-decoration:underline}
 .toast b{font-size:15px;letter-spacing:.1em}.toast span{font-size:12px;color:var(--sub)}
 .toast.relic{border-color:var(--acc);border-left-color:var(--acc)}.toast.bad{border-color:var(--warn);border-left-color:var(--warn)}.toast.warn{border-color:var(--acc);border-left-color:var(--warn)}.toast.lvl{border-color:var(--acc2)}
 @keyframes tin{from{opacity:0;transform:translateY(-10px) scale(.96)}to{opacity:1;transform:none}}@keyframes tout{to{opacity:0;transform:translateY(-6px)}}
+
+/* ===== 창 닫기 · 퀘스트 창 · 집 · 파도 ===== */
+.card{position:relative}
+.card::before,.card::after{content:"";position:absolute;width:9px;height:9px;border:1px solid var(--acc);opacity:.65;pointer-events:none}
+.card::before{left:-1px;top:-1px;border-right:0;border-bottom:0}.card::after{right:-1px;bottom:-1px;border-left:0;border-top:0}
+.pend.card::before,.pend.card::after{display:none}
+.wclosed{display:none!important}
+.card>.wx{position:absolute;top:6px;right:8px;margin:0;padding:0 7px;line-height:20px;height:22px;border:0;background:none;color:var(--sub);font-size:16px;z-index:1;opacity:.6}
+.card>.wx:hover:not(:disabled){background:var(--hd);color:var(--ink);opacity:1}
+.bar{background-image:repeating-linear-gradient(90deg,transparent 0 18px,color-mix(in srgb,var(--sub) 35%,transparent) 18px 19px)}
+#skyb{position:relative;z-index:3;display:flex;gap:6px;margin-right:10px}
+#skyb button{margin:0;padding:1px 10px;font-size:12px;letter-spacing:.08em;height:24px;line-height:20px}
+#skyb button.has{border-color:var(--acc)}
+#qbadge{font-style:normal;display:inline-block;min-width:16px;height:16px;line-height:16px;margin-left:6px;border-radius:8px;background:var(--acc);color:var(--on);font-size:11px;text-align:center;padding:0 4px}
+#winmenu{position:fixed;top:50px;right:14px;z-index:30;background:var(--card);border:1px solid var(--line);border-radius:3px;box-shadow:0 8px 24px -10px var(--shadow);padding:6px;display:flex;flex-direction:column;min-width:170px}
+#winmenu .wmh{font-size:11px;letter-spacing:.14em;color:var(--sub);padding:2px 6px 6px}
+#winmenu .wm{margin:0;text-align:left;border:0;border-radius:2px;background:none;padding:5px 8px}#winmenu .wm i{font-style:normal;display:inline-block;width:18px;color:var(--acc2)}
+#seacard canvas{display:block;width:100%;height:140px;border:1px solid var(--line);border-radius:2px;background:var(--sea)}
+#seacard h2 .sub{font-weight:400}
+/* 집 */
+.rl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.rr{display:flex;gap:12px;align-items:flex-start;text-align:left;padding:10px 12px;margin:0;width:100%}
+.rr svg{flex:none;width:24px;height:24px;border:0;cursor:inherit;color:var(--acc2);margin-top:2px;stroke:currentColor;fill:none}
+.rr b{display:block;font-weight:600;font-size:14px;letter-spacing:.06em}.rr span{display:block;color:var(--sub);font-size:12px;margin-top:2px;line-height:1.45}
+.rr.on{background:var(--hd);border-color:var(--acc)}.rr.on svg{color:var(--acc)}
+.hd{float:right;letter-spacing:0}.hd i{display:inline-block;width:9px;height:9px;margin-left:4px;border:1px solid var(--sub);border-radius:50%}.hd i.on{background:var(--acc);border-color:var(--acc)}
+/* 퀘스트 창 */
+.qw{background:var(--bg2);border:1px solid var(--line);border-radius:3px;width:min(900px,96vw);max-height:90vh;display:flex;flex-direction:column;padding:14px 16px;box-shadow:0 24px 60px -20px var(--shadow)}
+.qt{display:flex;align-items:baseline;gap:12px}.qt h2{margin:0 0 8px!important;flex:none;border:0!important;padding:0!important}.qt .sub{flex:1}
+.wx2{margin:0;border:0;background:none;font-size:20px;line-height:1;padding:0 8px;color:var(--sub)}
+.qtabs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:8px}.qtabs .sp{flex:1}
+.qtabs button{margin:0;padding:3px 12px}.qtabs button b{font-weight:400;color:var(--sub);margin-left:6px;font-size:12px}.qtabs button.on{background:var(--hd);border-color:var(--acc2);color:var(--ink)}
+.qtabs .f{padding:2px 9px;font-size:12px;border-color:transparent;background:none}.qtabs .f.on{border-color:var(--line)}
+.qbody{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px;margin-top:12px;min-height:0;flex:1;overflow:hidden}
+.ql{overflow:auto;max-height:62vh;display:flex;flex-direction:column;gap:4px;padding-right:4px}
+.qi{display:flex;gap:10px;align-items:center;width:100%;text-align:left;margin:0;padding:7px 10px;border-radius:2px}
+.qi span{flex:1;min-width:0;display:block;line-height:1.35}.qi small{display:block;color:var(--sub);font-size:11px}.qi em{font-style:normal;color:var(--acc)}
+.qi.on{background:var(--hd);border-color:var(--acc)}.qi.lk{opacity:.55}
+.m{font-style:normal;display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;font-size:12px;font-weight:700;flex:none;border:1px solid var(--line);color:var(--sub);line-height:1}
+.m.n{background:var(--acc);border-color:var(--acc);color:var(--on)}.m.r{background:var(--ok);border-color:var(--ok);color:var(--on)}.m.p{border-color:var(--acc2);color:var(--acc2)}.m.d{border-color:var(--ok);color:var(--ok)}
+.qd{overflow:auto;max-height:62vh;border:1px solid var(--line);border-radius:3px;padding:14px 18px;background:var(--card)}
+.qd h3{font-size:17px;color:var(--ink);margin:0 0 2px;letter-spacing:.04em}.tg2{font-size:11px;font-weight:400;border:1px solid var(--line);border-radius:9px;padding:0 8px;color:var(--sub);vertical-align:2px;margin-left:6px}
+.qs{margin:12px 0;line-height:1.75;padding-left:12px;border-left:2px solid var(--acc)}
+.qh{font-size:11px;letter-spacing:.16em;color:var(--acc2);margin:14px 0 6px}.qh::before{content:"◆ ";color:var(--acc);font-size:8px}
+.qo{display:grid;grid-template-columns:18px 1fr auto;gap:2px 8px;align-items:center;padding:2px 0}.qo i{font-style:normal;color:var(--sub)}.qo.ok i{color:var(--ok)}.qo.ok span{color:var(--sub)}.qo b{font-weight:400;font-size:12px;color:var(--sub)}
+.qb{grid-column:2/4;height:4px;border-radius:2px;background:var(--hd);overflow:hidden}.qb i{display:block;height:100%;background:var(--acc2)}.qo.ok .qb i{background:var(--ok)}
+.qr{color:var(--ink)}.qa{margin-top:16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.qa button{margin:0}
+button.d{color:var(--warn);border-color:var(--warn)}
+.qe{display:grid;place-items:center;text-align:center;color:var(--sub);min-height:200px;gap:6px}.qe .big{font-size:32px;color:var(--line)}
+.qtk .qn{display:flex;gap:8px;align-items:center;margin-bottom:6px}.qtk .qo{padding:2px 0}.qlink{margin-top:10px}.qlink button{margin:0}
+@media(max-width:820px){.qbody{grid-template-columns:1fr}.ql{max-height:26vh}.qd{max-height:40vh}#skyb button{padding:1px 7px}}
+body.crew #seacard,body.crew #qbtn{display:none}

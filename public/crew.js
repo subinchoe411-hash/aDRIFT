@@ -215,18 +215,18 @@ O.renderCrewInfo=()=>{
 /* ================================================================
    선원 쪽 — 같은 화면 틀을 쓰되 선장실 대신 선원실
    ================================================================ */
-let cs={bag:{},sel:[],diary:[],known:[],gold:0,dex:[],ch:null,hun:80,hp:null,at:0,xp:{cook:0,fight:0,med:0,fix:0},ct:{explore:0,sell:0,earn:0},pr:""},csTimer=0,tab="deck",crewLog=[],tick=0,loaded=false;
+let cs={bag:{},sel:[],diary:[],known:[],gold:0,dex:[],ch:null,hun:80,thi:80,hp:null,at:0,xp:{cook:0,fight:0,med:0,fix:0},ct:{explore:0,sell:0,earn:0},pr:""},csTimer=0,tab="deck",crewLog=[],tick=0,loaded=false;
 const stamp=()=>new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"});
 const bagN=()=>Object.values(cs.bag).reduce((a,b)=>a+b,0),bagMax=()=>30+4*C.st.근력;
 function bagAdd(k,n){if(!knownItem(k)||n<=0)return 0;const a=Math.min(n,bagMax()-bagN());if(a>0)cs.bag[k]=(cs.bag[k]||0)+a;dirty();return a}
 function bagTake(k,n){if((cs.bag[k]||0)<n)return false;cs.bag[k]-=n;if(cs.bag[k]<=0)delete cs.bag[k];dirty();return true}
 function diary(t){cs.diary.unshift(`${stamp()} ${t}`);cs.diary.length=Math.min(cs.diary.length,30);dirty()}
 function dirty(){clearTimeout(csTimer);csTimer=setTimeout(saveState,4000)}
-async function saveState(){try{await O.api("/crewstate",{data:JSON.stringify({bag:cs.bag,diary:cs.diary,known:cs.known,is:cs.is||null,gold:cs.gold||0,dex:cs.dex||[],ch:cs.ch,hun:cs.hun,hp:cs.hp,at:cs.at,xp:cs.xp,ct:cs.ct})},"PUT")}catch(e){}}
+async function saveState(){try{await O.api("/crewstate",{data:JSON.stringify({bag:cs.bag,diary:cs.diary,known:cs.known,is:cs.is||null,gold:cs.gold||0,dex:cs.dex||[],ch:cs.ch,hun:cs.hun,thi:cs.thi,hp:cs.hp,at:cs.at,xp:cs.xp,ct:cs.ct})},"PUT")}catch(e){}}
 async function loadState(){
  try{const r=await O.api("/crewstate");if(r.data){const d=JSON.parse(r.data),bag={};for(const k in (d.bag||{})){if(knownItem(k)){const n=Math.floor(+d.bag[k]);if(n>0&&n<100)bag[k]=n}}
   cs.bag=bag;cs.diary=(Array.isArray(d.diary)?d.diary:[]).slice(0,30).map(x=>cleanStr(x,140));cs.known=(Array.isArray(d.known)?d.known:[]).slice(0,200).map(x=>cleanStr(x,30));cs.gold=Math.max(0,Math.min(1e8,Math.floor(+d.gold)||0));{const an=new Set(ARTS.map(a=>a[0]));cs.dex=(Array.isArray(d.dex)?d.dex:[]).filter(x=>an.has(x)).slice(0,ARTS.length)}{const c=d.ch;if(c&&c.st&&Array.isArray(c.tr)){const st={};let ok=true;STATS.forEach(k=>{const v=Math.round(+c.st[k]);if(!(v>=1&&v<=10))ok=false;st[k]=v});const tr=[...new Set(c.tr.filter(i=>Number.isInteger(i)&&i>=0&&i<T.length))];if(ok&&tr.reduce((a,i)=>a+T[i].c,0)<=5)cs.ch={st,tr}}}
- cs.hun=Math.max(0,Math.min(100,+d.hun>=0?+d.hun:80));cs.hp=d.hp==null?null:Math.max(1,Math.min(3000,+d.hp||1));cs.at=Math.max(0,+d.at||0);
+ cs.hun=Math.max(0,Math.min(100,+d.hun>=0?+d.hun:80));cs.thi=Math.max(0,Math.min(100,+d.thi>=0?+d.thi:80));cs.hp=d.hp==null?null:Math.max(1,Math.min(3000,+d.hp||1));cs.at=Math.max(0,+d.at||0);
  if(d.xp&&typeof d.xp==="object"){["cook","fight","med","fix"].forEach(k=>{cs.xp[k]=Math.max(0,Math.min(1e6,Math.floor(+d.xp[k])||0))})}
  if(d.ct&&typeof d.ct==="object"){["explore","sell","earn"].forEach(k=>{cs.ct[k]=Math.max(0,Math.min(1e9,Math.floor(+d.ct[k])||0))})}
  const q=d.is;if(q&&Number.isInteger(q.i)&&q.i>=0&&q.i<I.length&&typeof q.spot==='string'&&typeof q.bld==='string'){const u={};for(const k in (q.u||{})){const n=Math.floor(+q.u[k]);if(/^[\w-]{1,24}$/.test(k)&&n>0&&n<50)u[k]=n}cs.is={i:q.i,spot:cleanStr(q.spot,16),bld:cleanStr(q.bld,16),u}}}}catch(e){}
@@ -245,11 +245,11 @@ O.exitCrew=()=>{saveState();location.reload()};
 O.leaveShip=()=>{if(confirm("이 배에서 내릴까요? 쌓인 월급과 보관함은 그대로 남습니다."))O.api("/crew/leave",{}).then(()=>{saveState();location.reload()}).catch(e=>alert(e.message))};
 O.cside=()=>{const s=$("side");s.className=s.className==="open"?"":"open"};
 function build(){
- $("side").className="";
- $("side").innerHTML=`<div id="sm"><div class="smt"><span id="smn"></span><span id="smg"></span><button id="sbt" onclick="Online.cside()">정보 ▾</button></div><div class="smb"><span><em>선체</em><div class="bar" id="smub"><i></i></div></span><span><em>허기</em><div class="bar" id="smhb"><i></i></div></span><span><em>체력</em><div class="bar" id="smpb"><i></i></div></span></div></div>
+ $("side").className="";document.body.classList.add("crew");
+ $("side").innerHTML=`<div id="sm"><div class="smt"><span id="smn"></span><span id="smg"></span><button id="sbt" onclick="Online.cside()">정보 ▾</button></div><div class="smb"><span><em>선체</em><div class="bar" id="smub"><i></i></div></span><span><em>허기</em><div class="bar" id="smhb"><i></i></div></span><span><em>목마름</em><div class="bar" id="smtb"><i></i></div></span><span><em>체력</em><div class="bar" id="smpb"><i></i></div></span></div></div>
  <div id="sbody"><b id="csn" style="font-size:16px"></b><div class="sub sm" id="cscap"></div><div class="sub sm" id="csclk" style="margin-top:8px"></div><div class="sub sm" id="cswh"></div>
  <h2>배 상태</h2><div class="row"><span>선체</span><span id="chv" class="sm"></span></div><div class="bar" id="chb"><i></i></div>
- <h2>나</h2><div class="row"><span>이름</span><span id="cnm"></span></div><div class="row"><span>직책</span><span id="crl"></span></div><div class="row"><span>칭호</span><span id="crk"></span></div><div class="row"><span>허기</span><span id="chnv" class="sm"></span></div><div class="bar" id="chnb"><i></i></div><div class="row"><span>체력</span><span id="cpv" class="sm"></span></div><div class="bar" id="cpb"><i></i></div><div class="row"><span>골드</span><span id="cgd"></span></div><div class="row"><span>쌓인 월급</span><span id="cpu"></span></div><div class="row"><span>오늘 더 받을 수 있는 월급</span><span id="cdl" class="sm"></span></div>
+ <h2>나</h2><div class="row"><span>이름</span><span id="cnm"></span></div><div class="row"><span>직책</span><span id="crl"></span></div><div class="row"><span>칭호</span><span id="crk"></span></div><div class="row"><span>허기</span><span id="chnv" class="sm"></span></div><div class="bar" id="chnb"><i></i></div><div class="row"><span>목마름</span><span id="ctnv" class="sm"></span></div><div class="bar" id="ctnb"><i></i></div><div class="row"><span>체력</span><span id="cpv" class="sm"></span></div><div class="bar" id="cpb"><i></i></div><div class="row"><span>골드</span><span id="cgd"></span></div><div class="row"><span>쌓인 월급</span><span id="cpu"></span></div><div class="row"><span>오늘 더 받을 수 있는 월급</span><span id="cdl" class="sm"></span></div>
  <h2>항해</h2><div class="row"><span>방위</span><span id="chd"></span></div><div class="row"><span>속력</span><span id="ckn"></span></div><div class="row"><span>바람</span><span id="cwd"></span></div><div class="row"><span>남은 거리</span><span id="cds"></span></div>
  <h2>메뉴</h2><div><button onclick="Online.exitCrew()">타이틀로</button><button onclick="Online.leaveShip()">배에서 내리기</button><button id="mutebtn" onclick="toggleMute()">소리 끄기</button></div><div class="sub sm">타이틀로 가도 배에는 계속 타고 있습니다.</div></div>`;
  setTabs();
@@ -268,10 +268,11 @@ function applyChar(){const nm=me().cname||(C&&C.name)||"";
 /* 시간이 흐르면 허기가 줄고, 허기가 높으면 체력이 차고 0이면 닳는다. 닫혀 있던 시간은 천천히(40%), 허기 15 아래로는 안 내려간다. */
 function cVit(){if(!cs.ch)return;const now=Date.now(),dt=Math.min(1440,(now-(cs.at||now))/60000);if(dt<=0)return;cs.at=now;const off=dt>1;
  cs.hun=Math.max(off?Math.min(cs.hun,15):0,cs.hun-dt/6*(1+M("hun"))*(off?.4:1));
- if(cs.hun<=0)cs.hp-=dt/15;else if(cs.hun>40)cs.hp=Math.min(hpMax(),cs.hp+dt/45);
- if(cs.hp<=0){cs.hp=hpMax()*.4;cs.hun=Math.max(cs.hun,30);cNote("허기와 체력이 모두 바닥나 쓰러졌다. 한참 뒤에야 눈을 떴다.")}
+ cs.thi=Math.max(off?Math.min(cs.thi,15):0,cs.thi-dt/5*(1+M("hun")*.5)*(off?.4:1));
+ if(cs.hun<=0)cs.hp-=dt/15;else if(cs.hun>40&&cs.thi>30)cs.hp=Math.min(hpMax(),cs.hp+dt/45);if(cs.thi<=0)cs.hp-=dt/12;
+ if(cs.hp<=0){cs.hp=hpMax()*.4;cs.hun=Math.max(cs.hun,30);cs.thi=Math.max(cs.thi,40);cNote("허기나 목마름으로 체력이 바닥나 쓰러졌다. 한참 뒤에야 눈을 떴다.")}
  if(cs.hp>hpMax())cs.hp=hpMax()}
-const cHungry=()=>cs.hun<10;
+const cHungry=()=>cs.hun<10||cs.thi<5;
 /* 칭호: 선원만의 칭호 */
 const CTL=[["새내기 일꾼","첫 일을 마쳤다",()=>(me().tasks||0)>=1],["성실한 일꾼","일을 20번 했다",()=>(me().tasks||0)>=20],["베테랑 일꾼","일을 100번 했다",()=>(me().tasks||0)>=100],["섬 탐험가","섬에서 탐색을 15번 했다",()=>cs.ct.explore>=15],["동전 수집가","골드를 모두 500G 모았다",()=>cs.ct.earn>=500],["유물 발굴가","유물을 3개 찾았다",()=>cs.dex.length>=3],["장사꾼","물건을 20번 팔았다",()=>cs.ct.sell>=20],["요리 장인","요리 숙련 5레벨",()=>cLv("cook")>=5],["든든한 동료","전투 숙련 5레벨",()=>cLv("fight")>=5]];
 const cTitles=()=>CTL.filter(t=>t[2]()),cTitle=()=>{const l=cTitles();return l.length?l[l.length-1][0]:"선원"};
@@ -285,7 +286,7 @@ function setTabs(){const k=isl()>=0?"i":"n";if(k===tabKey&&$("tabs").children.le
  $("tabs").innerHTML=[["deck","갑판"],...(k==="i"?[["island","섬"]]:[]),["kitchen","주방"],["cabin","선원실"],["inv","소지품"]].map(([t,n])=>`<button data-t="${t}" class="${t===tab?"on":""}" onclick="Online.cgo('${t}')">${n}</button>`).join("")}
 const CK={beach:"explore",vine:"explore",gate:"explore",steps:"explore",crater:"explore",coral:"explore",yard:"explore",hall:"explore",crypt:"explore",lava:"explore",vent:"explore",room:"explore",wreck:"explore",grove:"explore",palm:"gather",herb:"gather",rock:"gather",pool:"gather",grass:"hunt",trail:"hunt",vein:"mine",creek:"fish",dock:"fish"};
 const KP={explore:["조개","약초","해초","소금","산딸기","야자열매","달걀"],gather:["약초","산딸기","야자열매","해초","조개","소금"],hunt:["고기","달걀","고기"],mine:["유황","소금","소금"]};
-const KN={explore:["탐색",9],gather:["채집",12],hunt:["사냥",18],mine:["채굴",18],fish:["낚시",9],look:["둘러보기",6]};
+const KN={explore:["탐색",9],gather:["채집",12],hunt:["사냥",18],mine:["채굴",18],fish:["낚시",9],look:["둘러보기",6],water:["물 긷기",6]};
 function cNote(t){note(t);diary(t)}
 function cGold(n){n=Math.max(0,Math.round(n*(1+M("gold"))));if(!n)return 0;cs.gold=Math.min(1e8,(cs.gold||0)+n);cs.ct.earn+=n;dirty();return n}
 function cRelic(){const u=ARTS.filter(a=>!cs.dex.includes(a[0])),a=pick(u.length?u:ARTS);if(!cs.dex.includes(a[0]))cs.dex.push(a[0]);cGive(a[0],1);dirty();fxBig("유물 발견",a[0],"relic");return a}
@@ -297,6 +298,7 @@ function cDo(kind,spotName,key){
   if(mx){st.u[key]=(st.u[key]||0)+1}cs.ct.explore++;
   if(EX[key]){const r=EX[key].r;const raw=pick(r)();const[txt,tok]=raw.split("|");let got=[];(tok||"").split(";").forEach(t=>{const m=/^i:([^:]+):(\d+)$/.exec(t);if(m&&knownItem(m[1])){const a=cGive(m[1],+m[2]);if(a)got.push(`${m[1]} ${a}`)}const g=/^g:(\d+)$/.exec(t);if(g){const n=cGold(+g[1]);if(n)got.push(`${n}G`)}if(t==="a"){const a=cRelic();got.push(`유물 「${a[0]}」`)}});cNote(`${spotName}: ${txt}${got.length?` (${got.join(", ")})`:""}`)}
   else if(kind==="fish"){const k=pick(COAST),a=cGive(k,1+R(2));cNote(`${spotName}에서 낚시를 했다. `+(a?`${k} ${a}마리를 낚았다.`:"입질이 없었다."))}
+  else if(kind==="water"){const a=cGive("식수",3+(rnd()<.3?1:0));cNote(`${spotName}에서 맑은 물을 길었다.${a?` (식수 ${a})`:""}`)}
   else if(kind==="look"){cNote(`${spotName}: ${pick(GOSSIP)}`)}
   else{const r=R(100);if(kind==="explore"&&r<12){const n=cGold(5+R(21));cNote(`${spotName}에서 낡은 동전 주머니를 찾았다. (${n}G)`)}else if(kind==="explore"&&r>=97-Math.round(M("luck")*100)&&["폐허","사원","해적섬","암초섬"].includes(w.t)){const a=cRelic();cNote(`${spotName}에서 먼지 속에 묻힌 유물을 찾았다! 「${a[0]}」`)}else if(r<15)cNote(`${spotName}을(를) ${lab}했지만 별것 없었다.`);else if(r<25)cNote(`${spotName}에서 돌부리에 정강이를 부딪쳤다. 아프다.`);else{const k=pick(KP[kind]),n=1+R(2),a=cGive(k,n);cNote(`${spotName}에서 ${lab}한 끝에 ${k}${jo(k,"을(를)")} 찾았다.${a?` (${k} ${a})`:""}`)}}
   dirty()}};
@@ -327,6 +329,7 @@ function placeActs(st,w,z){
  else if(CK[id]==="fish")h=btn("fish",id,"낚시");
  else if(CK[id])h=btn(CK[id],id);
  else h=btn("look",id,"둘러보기");
+ if((id==="dock"||id==="well")&&hasWater(w))h+=btn("water",id,"물 긷기");
  if(town&&id==="grove")h=btn("explore","grove","탐색")+btn("gather","grove-g","채집")+btn("hunt","grove-h","사냥");
  if((town&&id==="market")||(!town&&id==="black")){const ks=Object.keys(cs.bag).filter(k=>cs.bag[k]>0);h+=`<h2>팔기</h2>`+(ks.length?ks.map(k=>`<div class="row"><span>${esc(k)} ×${cs.bag[k]}</span><a onclick="Online.csell('${esc(k)}')">팔기 ${cpr(k,w)}G</a></div>`).join(""):"<div class='sub sm'>팔 물건이 없다.</div>")}
  return `<h2 style="margin-top:0">${esc(name)}</h2><div class="sub sm">${esc(town?(id==="dock"?"배가 묶여 있는 부두다.":"마을의 한 곳이다."):(sp.d||""))}</div><div style="margin-top:8px">${h}</div>`}
@@ -375,7 +378,7 @@ O.pickRole=r=>{cs.pr=r;render()};
 O.chkChar=()=>{const b=$("ccb");if(b)b.disabled=!(me().role||cs.pr)||!C.name.trim()||C.pts>0||bud()<0};
 O.createChar=()=>{const name=cleanName(C.name).trim(),role=me().role||cs.pr;if(!name||!role||C.pts||bud()<0)return;
  if(!me().role&&!confirm(`「${name}」, 직책 「${role}」(으)로 시작할까요? 탑승 중에는 직책을 바꿀 수 없습니다.`))return;
- act(async()=>{if(!me().role)await O.api("/crew/role",{role,name});cs.ch={st:Object.assign({},C.st),tr:[...C.tr]};cs.hun=80;cs.hp=80+C.st.체력*6;cs.at=Date.now();applyChar();dirty();note(`${name}(으)로서 「${role}」 직책을 맡아 일을 시작했다.`)})};
+ act(async()=>{if(!me().role)await O.api("/crew/role",{role,name});cs.ch={st:Object.assign({},C.st),tr:[...C.tr]};cs.hun=80;cs.thi=80;cs.bag["식수"]=3;cs.hp=80+C.st.체력*6;cs.at=Date.now();applyChar();dirty();note(`${name}(으)로서 「${role}」 직책을 맡아 일을 시작했다.`)})};
 const D8=["북","북동","동","남동","남","남서","서","북서"];
 function side(){
  const m=O.data.crew.memberOf,sh=m.ship,sn=snapOf(),mm=me();
@@ -387,7 +390,7 @@ function side(){
  if(sn.h!=null)set("h",sn.h,sn.hm,.3);
  $("cnm").textContent=mm.cname||"";$("crl").textContent=mm.role||"미정";$("crk").textContent=cTitle();
  const vv=(k,id,mx,w)=>{$(id+"v").textContent=cs.ch?Math.round(cs[k])+" / "+mx:"—";$(id+"b").firstElementChild.style.width=cs.ch?Math.max(0,Math.min(100,cs[k]/Math.max(1,mx)*100))+"%":"0%";$(id+"b").className="bar"+(cs.ch&&cs[k]/Math.max(1,mx)<w?" w":"")};
- vv("hun","chn",100,.25);vv("hp","cp",hpMax(),.3);
+ vv("hun","chn",100,.25);vv("thi","ctn",100,.25);vv("hp","cp",hpMax(),.3);
  $("cgd").textContent=(cs.gold||0)+" G";$("cpu").textContent=mm.purse+" G";$("cdl").textContent=mm.dayLeft+" G";
  $("chd").textContent=sh?Math.round(sh.hd)+"°":"—";$("ckn").textContent=sn.sail?(sn.kn||0)+" 노트":"—";
  $("cwd").textContent=sn.wind!=null?D8[Math.round(((sn.wind+180)%360)/45)%8]+"풍 · "+(sn.ws<.85?"약함":sn.ws<1.2?"보통":"강함"):"—";
@@ -395,7 +398,7 @@ function side(){
  {const mb=$("mutebtn");if(mb)mb.textContent=muted()?"소리 켜기":"소리 끄기"}
  $("smn").textContent=`${sh?sh.ship:"배"} · ${mm.cname||"선원"}`;$("smg").textContent=(cs.gold||0)+" G";
  const sb=(k,v,mx,w)=>{$(k).firstElementChild.style.width=Math.min(100,Math.max(0,v/Math.max(1,mx)*100))+"%";$(k).className="bar"+(v/Math.max(1,mx)<w?" w":"")};
- if(sn.h!=null)sb("smub",sn.h,sn.hm,.3);if(cs.ch){sb("smhb",cs.hun,100,.25);sb("smpb",cs.hp||0,hpMax(),.3)}}
+ if(sn.h!=null)sb("smub",sn.h,sn.hm,.3);if(cs.ch){sb("smhb",cs.hun,100,.25);sb("smtb",cs.thi,100,.25);sb("smpb",cs.hp||0,hpMax(),.3)}}
 
 /* ---- 갑판 ---- */
 function mapSvg(sh,sn){
@@ -424,7 +427,7 @@ function deck(){
  const own=DUTY.find(d=>d[3]===mm.role),rest=DUTY.filter(d=>d!==own);
  const dbtn=d=>{const sec=secs(d[0]);return cb(`${d[1]} ${d[2]}${sec>0?` (${sec}초)`:""}`,`Online.duty('${d[0]}')`,sec>0||cHungry(),d===own,`data-duty="${d[0]}" data-l="${d[1]} ${d[2]}" title="${esc(d[4])}"`)};
  const rsec=Math.max(0,Math.ceil(((cs.restAt||0)-Date.now())/1000));
- $("acts").innerHTML=act+gp("배 위에서",(own?dbtn(own):"")+rest.map(dbtn).join(""),`${own?`<b>${own[1]} ${own[2]}</b>은(는) 내 직책(${esc(mm.role)})의 일이라 효과와 월급이 크다. `:""}일마다 허기가 3 줄어든다.`)+gp("휴식",cb(`해먹에서 쉬기${rsec>0?` (${rsec}초)`:""}`,"Online.rest()",rsec>0||(cs.hp||0)>=hpMax()*.95,0,`data-rest="1" data-l="해먹에서 쉬기"`)+cb("식사","Online.cgo('inv')",0));
+ $("acts").innerHTML=act+gp("배 위에서",(own?dbtn(own):"")+rest.map(dbtn).join(""),`${own?`<b>${own[1]} ${own[2]}</b>은(는) 내 직책(${esc(mm.role)})의 일이라 효과와 월급이 크다. `:""}일마다 허기가 3 줄어든다.`)+gp("휴식",cb(`해먹에서 쉬기${rsec>0?` (${rsec}초)`:""}`,"Online.rest()",rsec>0||(cs.hp||0)>=hpMax()*.95,0,`data-rest="1" data-l="해먹에서 쉬기"`)+cb("식사","Online.cgo('inv')",0)+cb("물 마시기","Online.cdrink()",0));
  // 전투 / 잠수 / 장면
  const bt=$("btl"),pe=$("pend");
  if(sn.bt){const b=sn.bt;bt.className="card pend";bt.innerHTML=`<h2 style="margin-top:0">전투 — ${esc(b.t)} · 라운드 ${b.rd}</h2><div class="two"><div><h3>적</h3>${b.en.map(e=>`<div class="${e.hp<=0?"dead":""}"><div class="row"><span>${esc(e.n)}</span><span class="sm">${e.hp}/${e.mhp}</span></div>${bar(e.hp,e.mhp)}</div>`).join("")}</div><div><h3>아군</h3>${b.al.map(a=>`<div class="${a.hp<=0?"dead":""}"><div class="row"><span>${esc(a.n)} ${a.role?`<span class="sub sm">${esc(a.role)}</span>`:""}</span><span class="sm">${a.hp}/${a.mhp}</span></div>${bar(a.hp,a.mhp)}</div>`).join("")}</div></div><div style="margin-top:8px">${gp("지원",supBtns(BSUP,mm),supHelp(BSUP)+" — 선장이 다음에 행동할 때 전투에 반영된다")}</div><div class="sub sm bt-log">${(b.log||[]).map(l=>`<div>${esc(l)}</div>`).join("")}</div>`}
@@ -447,10 +450,10 @@ function timers(){
 
 const note=t=>{crewLog.unshift(`${stamp()} ${t}`);crewLog.length=Math.min(crewLog.length,12)};
 async function act(fn){try{await fn()}catch(e){note("※ "+e.message)}O.syncNow();render()}
-O.duty=k=>act(async()=>{if(cHungry())throw new Error("배가 고파 일할 기운이 없다. 먼저 뭘 먹자.");const r=await O.api("/crew/duty",{duty:k});cs.hun=Math.max(0,cs.hun-3);if(k==="cook")cAddXp("cook",2);if(k==="repair")cAddXp("fix",2);dirty();
+O.duty=k=>act(async()=>{if(cHungry())throw new Error("배가 고프거나 목이 말라 일할 기운이 없다. 먼저 먹고 마시자.");const r=await O.api("/crew/duty",{duty:k});cs.hun=Math.max(0,cs.hun-3);if(k==="cook")cAddXp("cook",2);if(k==="repair")cAddXp("fix",2);dirty();
  let extra="";if(r.mine){for(const it in r.mine){if(bagAdd(it,r.mine[it]))extra=` (내 몫으로 ${it} ${r.mine[it]} 챙겼다)`}}
  note(`${r.msg}${r.wage?` (월급 +${r.wage}G)`:""}${extra}`);diary(r.msg)});
-O.support=k=>act(async()=>{if(cHungry())throw new Error("배가 고파 힘이 나지 않는다.");const r=await O.api("/crew/support",{kind:k});{const m={fire:["fight",2],mend:["med",2],guard:["fight",1],distract:["fight",1],air:["med",1],rescue:["med",1]}[k];if(m)cAddXp(m[0],m[1])}cs.hun=Math.max(0,cs.hun-2);note(`${SUPNAME[k]}${r.bonus?" (직책의 솜씨!)":""} — 선장에게 닿았다.`)});
+O.support=k=>act(async()=>{if(cHungry())throw new Error("배가 고프거나 목이 말라 힘이 나지 않는다.");const r=await O.api("/crew/support",{kind:k});{const m={fire:["fight",2],mend:["med",2],guard:["fight",1],distract:["fight",1],air:["med",1],rescue:["med",1]}[k];if(m)cAddXp(m[0],m[1])}cs.hun=Math.max(0,cs.hun-2);note(`${SUPNAME[k]}${r.bonus?" (직책의 솜씨!)":""} — 선장에게 닿았다.`)});
 O.advise=i=>act(async()=>{await O.api("/crew/advise",{opt:i});note("선장에게 귓속말을 건넸다.")});
 O.rest=()=>{if(Date.now()<(cs.restAt||0))return;cs.restAt=Date.now()+60000;cs.hp=Math.min(hpMax(),(cs.hp||0)+10);dirty();cNote("해먹에 몸을 눕히자 배의 흔들림이 요람처럼 느껴졌다. 체력 +10");render()};
 O.crewDeliveries=async list=>{
@@ -479,7 +482,8 @@ O.ccook=()=>{
  if(!r){bagAdd("정체불명의 요리",1);cAddXp("cook",1);note("조리: 정체불명의 요리가 나왔다. 그래도 먹을 수는 있다.");diary("정체불명의 요리를 만들었다.")}
  else{const was=cs.known.includes(r.n);bagAdd(r.n,1);if(!was)cs.known.push(r.n);cAddXp("cook",was?2:5);const t=was?`조리: ${r.n}을(를) 만들었다.`:`조리: 새 레시피를 알아냈다 — ${r.n} (${r.i.join("+")})`;note(t);diary(t)}
  render()};
-O.ceat=k=>{if(!(cs.bag[k]>0)||!cs.ch)return;bagTake(k,1);const v=Math.round((BV[k]||10)*(1+M("cook")));cs.hun=Math.min(100,cs.hun+v);dirty();cNote(`${k}${jo(k,"을(를)")} 먹었다. 허기 +${v}`);render()};
+O.ceat=k=>{if(!(cs.bag[k]>0)||!cs.ch)return;bagTake(k,1);const v=Math.round((BV[k]||10)*(1+M("cook"))),wt=waterOf(k,v);cs.hun=Math.min(100,cs.hun+v);if(wt)cs.thi=Math.min(100,cs.thi+wt);dirty();cNote(`${k}${jo(k,"을(를)")} 먹었다. 허기 +${v}${wt?`, 목마름 +${wt}`:""}`);render()};
+O.cdrink=()=>{if(!cs.ch)return;if(cs.thi>=99){cNote("지금은 목이 마르지 않다.");return render()}const k=["식수","야자열매"].find(x=>cs.bag[x]>0);if(!k){cNote("마실 것이 없다. 섬의 우물이나 샘에서 물을 길어 오자.");return render()}bagTake(k,1);cs.thi=Math.min(100,cs.thi+DRK[k]);dirty();cNote(k==="식수"?`물을 마셨다. 목마름 +${DRK[k]}`:`${k}의 즙으로 목을 축였다. 목마름 +${DRK[k]}`);render()};
 O.cserve=k=>{if(!(cs.bag[k]>0))return;act(async()=>{await O.api("/crew/serve",{item:k});bagTake(k,1);note(`${k}을(를) 선장에게 올렸다.`)})};
 
 /* ---- 선원실 (선장실 대신) ---- */
@@ -494,7 +498,7 @@ function cabin(){
  <h2>칭호</h2>${tit.length?tit.map(t=>`<div class="row"><span><b>${t[0]}</b></span><span class="sub sm">${t[1]}</span></div>`).join(""):"<div class='sub sm'>아직 없다. 일을 하고 섬을 둘러보면 얻는다.</div>"}</div>
  <div><h2>직책</h2><div class="row seat"><span><b>${esc(mm.role)}</b><br><span class="sub sm">${esc((ROLE_TXT[mm.role]||[])[2]||"")}</span></span></div><div class="sub sm">직책은 탑승하기 전에 정한다. 바꾸려면 배에서 내렸다가 다시 탑승해야 한다.</div>
  <h2>동료</h2>${m.shipmates.map(x=>`<div class="row"><span>${esc(x.cname||x.name)}${x.name===O.user.username?" (나)":""}</span><span class="sub sm">${esc(x.role||"직책 미정")}</span></div>`).join("")||"<div class='sub sm'>없음</div>"}
- <h2>상태</h2><div class="row"><span>허기</span><span class="sm">${Math.round(cs.hun)} / 100</span></div>${bar(cs.hun,100,.25)}<div class="row"><span>체력</span><span class="sm">${Math.round(cs.hp||0)} / ${hpMax()}</span></div>${bar(cs.hp||0,hpMax(),.3)}
+ <h2>상태</h2><div class="row"><span>허기</span><span class="sm">${Math.round(cs.hun)} / 100</span></div>${bar(cs.hun,100,.25)}<div class="row"><span>목마름</span><span class="sm">${Math.round(cs.thi)} / 100</span></div>${bar(cs.thi,100,.25)}<div class="row"><span>체력</span><span class="sm">${Math.round(cs.hp||0)} / ${hpMax()}</span></div>${bar(cs.hp||0,hpMax(),.3)}
  <div class="row"><span>해먹에서 쉬기 <span class="sub sm">(체력 +10, 1분에 한 번)</span></span><button data-rest="1" data-l="쉬기" onclick="Online.rest()">쉬기</button></div>
  <div class="sub sm" style="margin-top:6px">일한 횟수 ${mm.tasks||0} · 월급은 소지품 탭에서 받는다.</div></div></div>`}
 
