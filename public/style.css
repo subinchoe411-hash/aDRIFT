@@ -214,3 +214,5 @@ button.d{color:var(--warn);border-color:var(--warn)}
 .qtk .qn{display:flex;gap:8px;align-items:center;margin-bottom:6px}.qtk .qo{padding:2px 0}.qlink{margin-top:10px}.qlink button{margin:0}
 @media(max-width:820px){.qbody{grid-template-columns:1fr}.ql{max-height:26vh}.qd{max-height:40vh}#skyb button{padding:1px 7px}}
 body.crew #seacard,body.crew #qbtn{display:none}
+.backh{margin-bottom:10px}.backh button{margin:0}
+.credit{margin-top:14px;font-size:11px;opacity:.8}.credit a{font-size:11px;margin-left:2px}#title .credit{margin-top:26px;text-align:center}
