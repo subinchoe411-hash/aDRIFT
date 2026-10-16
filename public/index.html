@@ -26,20 +26,21 @@
  <div class="row"><span>방위</span><span id="hd"></span></div><div class="row"><span>속력</span><span id="kn"></span></div>
  <div class="row"><span>바람</span><span id="wd"></span></div><div class="row"><span>풍속</span><span id="ws"></span></div><div class="row"><span>바람 각도</span><span id="wa"></span></div><div class="row"><span>남은 거리</span><span id="ds"></span></div><div class="row"><span>도착까지</span><span id="eta"></span></div>
  <h2>항로</h2><div id="dst"></div>
-<h2>저장</h2><div><button onclick="manualSave()">지금 저장</button><button onclick="resetGame()">처음부터</button></div><div id="svm" class="sub sm"></div>
+<h2>저장</h2><div><button onclick="manualSave()">지금 저장</button><button id="mutebtn" onclick="toggleMute()">소리 끄기</button><button onclick="resetGame()">처음부터</button></div><div id="svm" class="sub sm"></div>
 <!-- TEST-BEGIN -->
  <div id="tstw" hidden><h2>개발자 도구</h2><div id="tst"></div></div>
 <!-- TEST-END -->
 </div></aside>
 <div id="rt">
- <div id="sky" data-orb="sun"><span class="orb"></span><span id="skyt"></span></div>
+ <div id="sky" data-orb="sun"><span class="orb"></span><span id="skyw"></span><span id="skyt"></span></div>
  <nav id="tabs"></nav>
  <div id="mainw" class="dk">
   <div class="col" id="lcol">
    <div id="v-deck" class="col">
    <svg id="map" viewBox="0 0 640 280"><g id="dy"></g></svg>
    <div id="btl"></div><div id="pend"></div>
-   <div class="card" id="actcard"><h2>행동</h2><div id="prog"></div><div id="acts"></div><div id="bw" hidden class="grp" style="margin-top:10px"><div class="gt">병 편지</div><input id="btx" maxlength="60" placeholder="바다에 띄울 짧은 편지 (60자)" style="width:100%"><div style="margin-top:6px"><button class="pri" onclick="sendBottle()">던진다 (3분)</button><button onclick="$('bw').hidden=true">닫기</button></div></div></div>
+   <div class="card" id="expcard" hidden><h2>원정</h2><div id="exp"></div></div>
+   <div class="card" id="actcard"><h2>행동</h2><div id="prog"></div><div id="acts"></div><div id="bw" hidden class="grp" style="margin-top:10px"><div class="gt">병 편지</div><input id="btx" maxlength="60" placeholder="바다에 띄울 짧은 편지 (60자)" style="width:100%"><select id="bgift" hidden style="width:100%;margin-top:6px"></select><div style="margin-top:6px"><button class="pri" onclick="sendBottle()">던진다 (3분)</button><button onclick="$('bw').hidden=true">닫기</button></div></div></div>
    <div class="card"><h2>기록</h2><div id="log" class="lg"></div></div>
    </div>
    <div id="v-island" class="pan" hidden></div><div id="v-city" class="pan" hidden></div><div id="v-kitchen" class="pan" hidden></div><div id="v-cabin" class="pan" hidden></div><div id="v-inv" class="pan" hidden></div><div id="v-storage" class="pan" hidden></div>

@@ -26,7 +26,7 @@ export const SCHEMA = [
 ];
 
 // 이미 배포된 DB 를 새 버전으로 올리는 변경들. 각 문장은 개별로 실행하고 '이미 있음' 오류는 무시한다.
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 7;
 export const MIGRATIONS = [
   // v2: 선원 개편 (직책, 컨디션, 개인 보관함)
   `ALTER TABLE crew_profile ADD COLUMN role TEXT NOT NULL DEFAULT ''`,
@@ -40,4 +40,14 @@ export const MIGRATIONS = [
   `ALTER TABLE crew_profile ADD COLUMN cname TEXT NOT NULL DEFAULT ''`,
   // v5: 선장과 선원이 함께 쓰는 배 창고 (서버가 정본을 갖는다)
   `CREATE TABLE IF NOT EXISTS ship_sto(captain_id INTEGER PRIMARY KEY, items TEXT NOT NULL DEFAULT '{}', cap INTEGER NOT NULL DEFAULT 20, seq INTEGER NOT NULL DEFAULT 0, ver INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0)`,
+  // v6: 병 편지 선물, 섬 이름(첫 발견자 명명권), 주간 해역 보스
+  `ALTER TABLE bottles ADD COLUMN gift TEXT`,
+  `CREATE TABLE IF NOT EXISTS island_names(isl INTEGER PRIMARY KEY, name TEXT NOT NULL, user_id INTEGER NOT NULL, uname TEXT NOT NULL, at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS boss(week INTEGER PRIMARY KEY, hp INTEGER NOT NULL, dmg INTEGER NOT NULL DEFAULT 0, done_at INTEGER)`,
+  `CREATE TABLE IF NOT EXISTS boss_hit(week INTEGER NOT NULL, user_id INTEGER NOT NULL, dmg INTEGER NOT NULL DEFAULT 0, claimed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(week,user_id))`,
+  // v7: 선단 (친구끼리 묶어 서로의 배를 어디서나 보고, 선단 채팅을 한다)
+  `CREATE TABLE IF NOT EXISTS fleet(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, owner_id INTEGER NOT NULL, created INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS fleet_member(user_id INTEGER PRIMARY KEY, fleet_id INTEGER NOT NULL, joined INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS fleet_member_f ON fleet_member(fleet_id)`,
+  `CREATE TABLE IF NOT EXISTS fleet_invites(id INTEGER PRIMARY KEY AUTOINCREMENT, fleet_id INTEGER NOT NULL, from_id INTEGER NOT NULL, member_id INTEGER NOT NULL, created INTEGER NOT NULL, status TEXT NOT NULL)`,
 ];

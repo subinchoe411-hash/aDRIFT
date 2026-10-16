@@ -251,7 +251,7 @@ function build(){
  <h2>배 상태</h2><div class="row"><span>선체</span><span id="chv" class="sm"></span></div><div class="bar" id="chb"><i></i></div>
  <h2>나</h2><div class="row"><span>이름</span><span id="cnm"></span></div><div class="row"><span>직책</span><span id="crl"></span></div><div class="row"><span>칭호</span><span id="crk"></span></div><div class="row"><span>허기</span><span id="chnv" class="sm"></span></div><div class="bar" id="chnb"><i></i></div><div class="row"><span>체력</span><span id="cpv" class="sm"></span></div><div class="bar" id="cpb"><i></i></div><div class="row"><span>골드</span><span id="cgd"></span></div><div class="row"><span>쌓인 월급</span><span id="cpu"></span></div><div class="row"><span>오늘 더 받을 수 있는 월급</span><span id="cdl" class="sm"></span></div>
  <h2>항해</h2><div class="row"><span>방위</span><span id="chd"></span></div><div class="row"><span>속력</span><span id="ckn"></span></div><div class="row"><span>바람</span><span id="cwd"></span></div><div class="row"><span>남은 거리</span><span id="cds"></span></div>
- <h2>메뉴</h2><div><button onclick="Online.exitCrew()">타이틀로</button><button onclick="Online.leaveShip()">배에서 내리기</button></div><div class="sub sm">타이틀로 가도 배에는 계속 타고 있습니다.</div></div>`;
+ <h2>메뉴</h2><div><button onclick="Online.exitCrew()">타이틀로</button><button onclick="Online.leaveShip()">배에서 내리기</button><button id="mutebtn" onclick="toggleMute()">소리 끄기</button></div><div class="sub sm">타이틀로 가도 배에는 계속 타고 있습니다.</div></div>`;
  setTabs();
  ["city","storage"].forEach(k=>$("v-"+k).hidden=true);$("bw").hidden=true;if($("qcard"))$("qcard").hidden=true;
  if(!$("cpick")){const d=document.createElement("div");d.id="cpick";d.hidden=true;($("lcol")||$("rt")).appendChild(d)}}
@@ -260,7 +260,7 @@ function build(){
 /* ===== 선원도 선장과 같은 사람: 능력치·특성·숙련·허기·체력 =====
    선원 화면에서는 전역 C(캐릭터)를 선원 자신의 것으로 쓴다. 그러면 M()(특성·능력치 보정)이 선장 때와 똑같이 동작한다. */
 const cLv=k=>lvOf(cs.xp[k]||0);
-function cAddXp(k,n){const a=cLv(k);cs.xp[k]=(cs.xp[k]||0)+n;const b=cLv(k);dirty();if(b>a)cNote(`${LVN[k]} 숙련도가 ${b}레벨이 되었다!`)}
+function cAddXp(k,n){const a=cLv(k);cs.xp[k]=(cs.xp[k]||0)+n;const b=cLv(k);dirty();if(b>a){cNote(`${LVN[k]} 숙련도가 ${b}레벨이 되었다!`);fxBig("숙련 상승",`${LVN[k]} ${b}레벨`,"lvl")}}
 const hpMax=()=>80+C.st.체력*6+4*(cLv("fight")-1);
 function applyChar(){const nm=me().cname||(C&&C.name)||"";
  if(cs.ch){C={name:nm,st:Object.assign({},cs.ch.st),pts:0,tr:new Set(cs.ch.tr)};if(cs.hp==null)cs.hp=hpMax();if(!cs.at)cs.at=Date.now()}
@@ -288,7 +288,7 @@ const KP={explore:["조개","약초","해초","소금","산딸기","야자열매
 const KN={explore:["탐색",9],gather:["채집",12],hunt:["사냥",18],mine:["채굴",18],fish:["낚시",9],look:["둘러보기",6]};
 function cNote(t){note(t);diary(t)}
 function cGold(n){n=Math.max(0,Math.round(n*(1+M("gold"))));if(!n)return 0;cs.gold=Math.min(1e8,(cs.gold||0)+n);cs.ct.earn+=n;dirty();return n}
-function cRelic(){const u=ARTS.filter(a=>!cs.dex.includes(a[0])),a=pick(u.length?u:ARTS);if(!cs.dex.includes(a[0]))cs.dex.push(a[0]);cGive(a[0],1);dirty();return a}
+function cRelic(){const u=ARTS.filter(a=>!cs.dex.includes(a[0])),a=pick(u.length?u:ARTS);if(!cs.dex.includes(a[0]))cs.dex.push(a[0]);cGive(a[0],1);dirty();fxBig("유물 발견",a[0],"relic");return a}
 function cGive(k,n){const a=bagAdd(k,n);if(a<n)note("사물함이 가득 찼다. 배 창고에 넣어 두자.");return a}
 function cDo(kind,spotName,key){
  const st=isState(),w=I[st.i],lab=EX[key]?EX[key].act:KN[kind][0],min=EX[key]?EX[key].min:KN[kind][1],mx=EX[key]?EX[key].max:MAXU[kind];
@@ -338,7 +338,7 @@ function islandTab(){
  el.innerHTML=`<h2 style="margin-top:0">${esc(w.n)} <span class="sub">· ${esc(w.t)}</span></h2><div class="sub sm" style="margin:6px 0">선장이 이곳에 상륙해 있다. 밝은 표식이 지금 내가 있는 곳이다. 다른 곳은 눌러서 걸어가야 하고, 걷는 데 시간이 든다. 얻은 물건은 내 사물함에 담긴다.</div>`+map+`<div class="card" style="margin-top:10px">${placeActs(st,w,z)}</div><div id="cprog" style="margin-top:8px"></div><div class="card" style="margin-top:12px"><h2>기록</h2><div class="lg">${crewLog.map(x=>`<div>${esc(x)}</div>`).join("")||"<div>(기록 없음)</div>"}</div></div>`;
  cTick()}
 O.cdo=(kind,name,key)=>cDo(kind,name,key);
-const cpr=(k,w)=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*(w?w.m:1)*(1+M("gold"))));
+const cpr=(k,w)=>Math.max(1,Math.round((SELL[k]??(PRICE[k]?Math.floor(PRICE[k]/2):BV[k]?Math.floor(BV[k]/2):6))*(w?pm(w,k):1)*(1+M("gold"))));
 O.csell=k=>{const st=isState();if(!st||!(cs.bag[k]>0))return;const p=cpr(k,I[st.i]);bagTake(k,1);cs.gold=Math.min(1e8,(cs.gold||0)+p);cs.ct.earn+=p;cs.ct.sell++;dirty();cNote(`${k}${jo(k,"을(를)")} ${p}골드에 팔았다.`);render()};
 O.collect=()=>act(async()=>{const r=await O.api("/crew/collect",{});cs.gold=Math.min(1e8,(cs.gold||0)+r.gold);cs.ct.earn+=r.gold;dirty();cNote(`쌓인 월급 ${r.gold}G를 지갑에 넣었다.`)});
 function go(t){tab=t;document.querySelectorAll("#tabs button").forEach(b=>b.className=b.dataset.t===t?"on":"");render()}
@@ -392,6 +392,7 @@ function side(){
  $("chd").textContent=sh?Math.round(sh.hd)+"°":"—";$("ckn").textContent=sn.sail?(sn.kn||0)+" 노트":"—";
  $("cwd").textContent=sn.wind!=null?D8[Math.round(((sn.wind+180)%360)/45)%8]+"풍 · "+(sn.ws<.85?"약함":sn.ws<1.2?"보통":"강함"):"—";
  $("cds").textContent=sn.dst!=null?sn.dst+" 해리":"—";
+ {const mb=$("mutebtn");if(mb)mb.textContent=muted()?"소리 켜기":"소리 끄기"}
  $("smn").textContent=`${sh?sh.ship:"배"} · ${mm.cname||"선원"}`;$("smg").textContent=(cs.gold||0)+" G";
  const sb=(k,v,mx,w)=>{$(k).firstElementChild.style.width=Math.min(100,Math.max(0,v/Math.max(1,mx)*100))+"%";$(k).className="bar"+(v/Math.max(1,mx)<w?" w":"")};
  if(sn.h!=null)sb("smub",sn.h,sn.hm,.3);if(cs.ch){sb("smhb",cs.hun,100,.25);sb("smpb",cs.hp||0,hpMax(),.3)}}

@@ -396,11 +396,14 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT i.id,i.captain_id,u.username captainName,i.created FROM crew_invites i JOIN users u ON u.id=i.captain_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
+    P(env, "SELECT v FROM meta WHERE k='isn_ver'"),
+    P(env, "SELECT f.id,f.name,f.owner_id FROM fleet f JOIN fleet_member m ON m.fleet_id=f.id WHERE m.user_id=?", user.id),
+    P(env, "SELECT i.id,f.name fname,u.username fromName FROM fleet_invites i JOIN fleet f ON f.id=i.fleet_id JOIN users u ON u.id=i.from_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 3", user.id, t - 3 * DAY),
   );
   let sto = null;
   if (body.sto && typeof body.sto === "object") sto = await stoSync(env, user.id, body.sto);
   const r1 = (await env.DB.batch(stm)).slice(o).map((x) => x.results || []);
-  const [mineR, crewR, candR, rosterR, delivR, tinR, toutR, membersR, invInR, invOutR, profR] = r1;
+  const [mineR, crewR, candR, rosterR, delivR, tinR, toutR, membersR, invInR, invOutR, profR, isnR, fleetR, fleetInvR] = r1;
   const mine = mineR[0], crewRow = crewR[0], p = profR[0];
 
   const nearby = [];
@@ -418,7 +421,8 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   const myShip = crewRow ? crewRow.captain_id : user.id;
   // 같은 섬(부두·상륙 중)에 있는 사람끼리의 채팅
   const place = mine && mine.loc === "port" && mine.isl >= 0 && t - mine.updated < FRESH * 2 ? "place:" + mine.isl : null;
-  const chans = ["world", "crew:" + myShip, ...(place ? [place] : [])];
+  const fl = fleetR[0] || null;
+  const chans = ["world", "crew:" + myShip, ...(place ? [place] : []), ...(fl ? ["fleet:" + fl.id] : [])];
   const since = body.since && typeof body.since === "object" ? body.since : {};
   const stm2 = chans.map((ch) => typeof since[ch] === "number"
     ? P(env, "SELECT id,user_id uid,name,text,ts FROM chat WHERE channel=? AND id>? ORDER BY id LIMIT 60", ch, since[ch])
@@ -432,6 +436,14 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   const chat = {};
   chans.forEach((ch, i) => { chat[ch] = r2[i]; });
 
+  // 섬 이름 목록은 바뀐 때만 보낸다 (매 동기화마다 80줄을 읽지 않도록 버전 한 줄만 비교)
+  let isn;
+  { const v = isnR[0] ? String(isnR[0].v) : "0"; if (String(body.isnv || "0") !== v) isn = { v, list: await all(env, "SELECT isl,name,uname FROM island_names ORDER BY isl") }; }
+  let fleet = { invites: fleetInvR.map((r) => ({ id: r.id, fleet: r.fname, from: r.fromName })), mine: null };
+  if (fl) {
+    const ms = await all(env, "SELECT m.user_id id,u.username,p.name,p.ship,p.x,p.y,p.hd,p.loc,p.isl,p.updated FROM fleet_member m JOIN users u ON u.id=m.user_id LEFT JOIN presence p ON p.user_id=m.user_id WHERE m.fleet_id=? ORDER BY m.joined", fl.id);
+    fleet.mine = { id: fl.id, name: fl.name, owner: fl.owner_id, members: ms.map((r) => ({ id: r.id, name: r.name || r.username, user: r.username, ship: r.ship, x: r.x, y: r.y, hd: r.hd, loc: r.loc, isl: r.isl, online: !!(r.updated && t - r.updated < FRESH * 2), age: r.updated ? t - r.updated : null })) };
+  }
   const crew = { captainOf: [], memberOf: null, invitesIn: invInR, invitesOut: invOutR, me: null };
   crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.cname || r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0, tasks: r.tasks || 0, joined: r.joined, last: r.seen || 0 }));
   let cd = {};
@@ -451,7 +463,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   }
 
   return {
-    now: t, nearby, chat, crew, radius: R, roster: rosterR, place,
+    now: t, nearby, chat, crew, radius: R, roster: rosterR, place, isn, fleet,
     sto: sto ? { items: sto.items, cap: sto.cap, seq: sto.seq } : undefined,
     deliveries: delivR.map((d) => ({ ...d, payload: json(d.payload) })),
     trades: {
@@ -548,8 +560,15 @@ route("POST", "/api/bottle/send", async ({ env, user, body }) => {
   const text = cleanStr(body.text, 60);
   if (!text) throw bad("편지가 비었습니다.");
   if ((await first(env, "SELECT COUNT(*) n FROM bottles WHERE author_id=? AND finder_id IS NULL AND reply_to IS NULL", user.id)).n >= 3) throw bad("바다에 띄운 병이 너무 많습니다.");
+  // 선물: 아이템 1종 1~3개 (받는 사람은 모르는 사람이다)
+  let gift = null;
+  if (body.gift && typeof body.gift === "object") {
+    const k = body.gift.k, n = Math.floor(num(body.gift.n, 1, 3, 1));
+    if (!itemKey(k)) throw bad("선물로 보낼 수 없는 물건입니다.");
+    gift = JSON.stringify({ k, n });
+  }
   const p = await first(env, "SELECT name FROM presence WHERE user_id=?", user.id);
-  const r = await run(env, "INSERT INTO bottles(author_id,name,text,reply_to,created) VALUES(?,?,?,NULL,?)", user.id, p ? p.name : "무명", text, now());
+  const r = await run(env, "INSERT INTO bottles(author_id,name,text,reply_to,created,gift) VALUES(?,?,?,NULL,?,?)", user.id, p ? p.name : "무명", text, now(), gift);
   return { id: r.meta.last_row_id };
 });
 route("POST", "/api/bottle/find", async ({ env, user }) => {
@@ -558,10 +577,11 @@ route("POST", "/api/bottle/find", async ({ env, user }) => {
   const b = await first(env,
     `UPDATE bottles SET finder_id=?1, found_at=?2 WHERE finder_id IS NULL AND id=(
        SELECT id FROM bottles WHERE finder_id IS NULL AND reply_to IS NULL AND author_id<>?1 ORDER BY RANDOM() LIMIT 1)
-     RETURNING id,author_id,name,text,created`, user.id, now());
+     RETURNING id,author_id,name,text,created,gift`, user.id, now());
   if (!b) return { bottle: null };
   await dlv(env, b.author_id, "bottle_found", { text: b.text }).run();
-  return { bottle: { id: b.id, from: b.name, text: b.text, at: b.created } };
+  const g = json(b.gift);
+  return { bottle: { id: b.id, from: b.name, text: b.text, at: b.created, gift: g && itemKey(g.k) ? { k: g.k, n: Math.min(3, Math.max(1, g.n | 0)) } : null } };
 });
 route("POST", "/api/bottle/reply", async ({ env, user, body }) => {
   await limit(env, "reply:" + user.id, 10, 3_600_000);
@@ -585,7 +605,10 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const text = cleanStr(body.text, 80);
   if (!text) throw bad("내용이 비었습니다.");
   const ch = String(body.channel || "world");
-  if (ch.startsWith("place:")) {
+  if (ch.startsWith("fleet:")) {
+    const m = /^fleet:(\d+)$/.exec(ch), fl = m && await fleetOf(env, user.id);
+    if (!fl || fl.id !== Number(m[1])) throw new HttpError(403, "그 선단의 채팅에 참여할 수 없습니다.");
+  } else if (ch.startsWith("place:")) {
     const n = /^place:(\d{1,3})$/.exec(ch);
     const pr = n && await first(env, "SELECT loc,isl,updated FROM presence WHERE user_id=?", user.id);
     if (!pr || pr.loc !== "port" || pr.isl !== Number(n[1]) || now() - pr.updated > 120_000) throw new HttpError(403, "그 장소에 있지 않습니다.");
@@ -599,7 +622,7 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const p = await first(env, "SELECT name,updated FROM presence WHERE user_id=?", user.id);
   let nm = p ? p.name : user.username;
   // 선원 화면에서 말할 때(배 위치 신호가 없을 때)는 선원 캐릭터 이름으로
-  if (!p || now() - p.updated > 120_000 || (ch !== "world" && !ch.startsWith("place:"))) {
+  if (!p || now() - p.updated > 120_000 || (ch !== "world" && !ch.startsWith("place:") && !ch.startsWith("fleet:"))) {
     const cp = await first(env, "SELECT cname FROM crew_profile WHERE user_id=?", user.id);
     if (cp && cp.cname && (await crewRowOf(env, user.id))) nm = cp.cname;
   }
@@ -770,6 +793,123 @@ route("POST", "/api/crew/collect", async ({ env, user }) => {
   const r = await first(env, "UPDATE crew_profile SET purse=purse-?1 WHERE user_id=?2 AND purse>=?1 RETURNING purse", p.purse, user.id);
   if (!r) throw bad("찾을 월급이 없습니다.");
   return { ok: true, gold: p.purse };
+});
+
+
+/* ===== 섬 이름: 처음 그 섬에 닿은 사람이 이름을 지을 수 있다 (한 섬에 한 번, 선점) ===== */
+const ISL_MAX = 80;
+route("GET", "/api/islands", async ({ env }) => {
+  const rows = await all(env, "SELECT isl,name,uname FROM island_names ORDER BY isl");
+  const v = await first(env, "SELECT v FROM meta WHERE k='isn_ver'");
+  return { v: v ? v.v : "0", list: rows };
+});
+route("POST", "/api/island/name", async ({ env, user, body }) => {
+  await limit(env, "isn:" + user.id, 5, 3_600_000);
+  const isl = Math.floor(num(body.isl, 1, ISL_MAX - 1, 0)), name = String(body.name || "").trim().replace(/\s+/g, " ");
+  if (!isl || !/^[가-힣A-Za-z0-9 ]{2,10}$/.test(name)) throw bad("섬 이름은 한글·영문·숫자 2~10자로 지어 주세요.");
+  // 그 섬 부두에 실제로 닿아 있어야 한다 (배 위치 신호로 확인)
+  const pr = await first(env, "SELECT name,loc,isl,updated FROM presence WHERE user_id=?", user.id);
+  if (!pr || pr.loc !== "port" || pr.isl !== isl || now() - pr.updated > 120_000) throw bad("그 섬 부두에 닿아 있어야 이름을 지을 수 있습니다.");
+  const un = await first(env, "SELECT username FROM users WHERE id=?", user.id);
+  const res = await env.DB.batch([
+    P(env, "INSERT OR IGNORE INTO island_names(isl,name,user_id,uname,at) VALUES(?,?,?,?,?)", isl, name, user.id, pr.name || (un && un.username) || "무명", now()),
+    P(env, "INSERT INTO meta(k,v) SELECT 'isn_ver','1' WHERE changes()=1 ON CONFLICT(k) DO UPDATE SET v=CAST(CAST(v AS INTEGER)+1 AS TEXT)"),
+  ]);
+  if (changes(res[0]) !== 1) throw bad("이미 이름이 붙은 섬입니다.");
+  return { ok: true, isl, name };
+});
+
+/* ===== 주간 해역 보스: 모두의 피해가 합산된다. 쓰러뜨리면 참여한 사람은 보상을 받는다 ===== */
+const BOSS_HP = 3000, BOSS_MAX_HIT = 400;
+const BOSSES = [{ n: "대왕 크라켄", loot: "크라켄의 촉수" }, { n: "유령 제독의 함대", loot: "세이렌의 비늘" }, { n: "심해의 거대 상어", loot: "상어 고기" }];
+const kstWeek = (t) => Math.floor((Math.floor((t + 9 * 3_600_000) / DAY) + 3) / 7);
+async function bossState(env, uid) {
+  const wk = kstWeek(now());
+  await run(env, "INSERT OR IGNORE INTO boss(week,hp,dmg) VALUES(?,?,0)", wk, BOSS_HP);
+  const b = await first(env, "SELECT hp,dmg,done_at FROM boss WHERE week=?", wk);
+  const m = await first(env, "SELECT dmg,claimed FROM boss_hit WHERE week=? AND user_id=?", wk, uid);
+  const kind = BOSSES[Math.floor(hash01(wk) * BOSSES.length)];
+  const n = (await first(env, "SELECT COUNT(*) n FROM boss_hit WHERE week=?", wk)).n;
+  return { week: wk, kind: BOSSES.indexOf(kind), name: kind.n, hp: b.hp, dmg: b.dmg, done: b.dmg >= b.hp, mine: m ? m.dmg : 0, claimed: !!(m && m.claimed), fighters: n };
+}
+const hash01 = (n) => { let h = (Math.imul(n | 0, 374761393) + Math.imul(1234, 668265263) + 0x9e3779b9) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; };
+route("GET", "/api/boss", async ({ env, user }) => bossState(env, user.id));
+route("POST", "/api/boss/hit", async ({ env, user, body }) => {
+  await limit(env, "bhit:" + user.id, 1, 15_000);
+  await limit(env, "bhit1h:" + user.id, 30, 3_600_000);
+  const d = Math.floor(num(body.dmg, 1, BOSS_MAX_HIT, 0));
+  if (!d) throw bad("피해량이 올바르지 않습니다.");
+  const wk = kstWeek(now());
+  await run(env, "INSERT OR IGNORE INTO boss(week,hp,dmg) VALUES(?,?,0)", wk, BOSS_HP);
+  // 남은 체력까지만 인정하고, 쓰러지는 순간을 기록한다 (한 문장씩, 합산이 어긋나지 않게)
+  const res = await env.DB.batch([
+    P(env, "UPDATE boss SET dmg=MIN(hp,dmg+?1), done_at=CASE WHEN dmg+?1>=hp AND done_at IS NULL THEN ?2 ELSE done_at END WHERE week=?3 AND dmg<hp", d, now(), wk),
+    P(env, "INSERT INTO boss_hit(week,user_id,dmg) SELECT ?1,?2,?3 WHERE changes()=1 ON CONFLICT(week,user_id) DO UPDATE SET dmg=dmg+excluded.dmg", wk, user.id, d),
+  ]);
+  if (changes(res[0]) !== 1) throw bad("이번 주 보스는 이미 쓰러졌습니다.");
+  return bossState(env, user.id);
+});
+route("POST", "/api/boss/claim", async ({ env, user }) => {
+  const s = await bossState(env, user.id);
+  if (!s.done) throw bad("아직 보스가 쓰러지지 않았습니다.");
+  if (!s.mine) throw bad("이번 주 보스전에 참여하지 않았습니다.");
+  if (s.claimed) throw bad("이미 보상을 받았습니다.");
+  const gold = 200 + Math.min(400, Math.floor(s.mine / 3)), loot = BOSSES[s.kind].loot, txt = `${s.name}을(를) 쓰러뜨린 보상이 도착했다.`;
+  const cond = "week=?1 AND user_id=?2 AND claimed=0 AND dmg>0 AND EXISTS(SELECT 1 FROM boss WHERE week=?1 AND dmg>=hp)";
+  const res = await env.DB.batch([
+    P(env, `INSERT INTO deliveries(user_id,kind,payload,created) SELECT user_id,'boss_reward',json_object('text',?3,'gold',?4,'items',json_object(?5,1)),?6 FROM boss_hit WHERE ${cond}`, s.week, user.id, txt, gold, loot, now()),
+    P(env, `UPDATE boss_hit SET claimed=1 WHERE ${cond}`, s.week, user.id),
+  ]);
+  if (changes(res[0]) !== 1) throw bad("이미 보상을 받았습니다.");
+  return { ok: true, gold, loot };
+});
+
+
+/* ===== 선단: 최대 6명. 서로의 배가 (가까이 없어도) 지도에 보이고, 선단 채팅을 쓴다 ===== */
+const FLEET_MAX = 6;
+const fleetOf = (env, uid) => first(env, "SELECT f.id,f.name,f.owner_id FROM fleet f JOIN fleet_member m ON m.fleet_id=f.id WHERE m.user_id=?", uid);
+route("POST", "/api/fleet/create", async ({ env, user, body }) => {
+  await limit(env, "fcre:" + user.id, 5, 3_600_000);
+  const name = String(body.name || "").trim().replace(/\s+/g, " ");
+  if (!/^[가-힣A-Za-z0-9 ]{2,12}$/.test(name)) throw bad("선단 이름은 한글·영문·숫자 2~12자로 지어 주세요.");
+  if (await fleetOf(env, user.id)) throw bad("이미 선단에 속해 있습니다.");
+  const r = await run(env, "INSERT INTO fleet(name,owner_id,created) VALUES(?,?,?)", name, user.id, now());
+  await run(env, "INSERT INTO fleet_member(user_id,fleet_id,joined) VALUES(?,?,?)", user.id, r.meta.last_row_id, now());
+  return { ok: true, id: r.meta.last_row_id };
+});
+route("POST", "/api/fleet/invite", async ({ env, user, body }) => {
+  await limit(env, "finv:" + user.id, 10, 60_000);
+  const f = await fleetOf(env, user.id);
+  if (!f) throw bad("먼저 선단을 만드세요.");
+  const target = await first(env, "SELECT id FROM users WHERE username=?", String(body.username || "").trim());
+  if (!target || target.id === user.id) throw bad("초대할 수 없는 아이디입니다.");
+  if (await first(env, "SELECT 1 x FROM fleet_member WHERE user_id=?", target.id)) throw bad("그 사람은 이미 다른 선단에 있습니다.");
+  if ((await first(env, "SELECT COUNT(*) n FROM fleet_member WHERE fleet_id=?", f.id)).n >= FLEET_MAX) throw bad(`선단은 최대 ${FLEET_MAX}명까지입니다.`);
+  if (await first(env, "SELECT 1 x FROM fleet_invites WHERE fleet_id=? AND member_id=? AND status='open' AND created>?", f.id, target.id, now() - 3 * DAY)) throw bad("이미 초대했습니다.");
+  await run(env, "INSERT INTO fleet_invites(fleet_id,from_id,member_id,created,status) VALUES(?,?,?,?,'open')", f.id, user.id, target.id, now());
+  return { ok: true };
+});
+route("POST", "/api/fleet/respond", async ({ env, user, body }) => {
+  const id = Math.floor(num(body.id, 1, 1e12, 0));
+  const inv = await first(env, "SELECT * FROM fleet_invites WHERE id=? AND member_id=? AND status='open' AND created>?", id, user.id, now() - 3 * DAY);
+  if (!inv) throw bad("초대가 없거나 만료되었습니다.");
+  if (!body.accept) { await run(env, "UPDATE fleet_invites SET status='no' WHERE id=?", id); return { ok: true }; }
+  if (await fleetOf(env, user.id)) throw bad("이미 선단에 속해 있습니다.");
+  // 정원 확인과 가입을 한 문장으로 (동시에 수락해도 6명을 넘지 않게)
+  const r = await run(env, "INSERT INTO fleet_member(user_id,fleet_id,joined) SELECT ?1,?2,?3 WHERE (SELECT COUNT(*) FROM fleet_member WHERE fleet_id=?2)<?4", user.id, inv.fleet_id, now(), FLEET_MAX);
+  if (changes(r) !== 1) throw bad("선단이 가득 찼습니다.");
+  await run(env, "UPDATE fleet_invites SET status='yes' WHERE id=?", id);
+  return { ok: true };
+});
+route("POST", "/api/fleet/leave", async ({ env, user }) => {
+  const f = await fleetOf(env, user.id);
+  if (!f) throw bad("선단에 속해 있지 않습니다.");
+  await run(env, "DELETE FROM fleet_member WHERE user_id=?", user.id);
+  // 마지막 사람이 나가면 선단을 지우고, 선단장이 나가면 가장 먼저 들어온 사람이 이어받는다
+  const rest = await first(env, "SELECT user_id FROM fleet_member WHERE fleet_id=? ORDER BY joined LIMIT 1", f.id);
+  if (!rest) await run(env, "DELETE FROM fleet WHERE id=?", f.id);
+  else if (f.owner_id === user.id) await run(env, "UPDATE fleet SET owner_id=? WHERE id=?", rest.user_id, f.id);
+  return { ok: true };
 });
 
 /* ---------- 관리자: 초대 코드 발급 ---------- */
