@@ -367,3 +367,34 @@ test("주간 보스: 피해 합산, 쓰러뜨리면 참여자가 한 번씩 보�
   const d = (await sync(a.tok, me({}))).deliveries.find((x) => x.kind === "boss_reward");
   assert.ok(d && d.payload.gold >= 200 && Object.keys(d.payload.items).length === 1);
 });
+
+test("선단: 만들기·초대·수락, 서로의 위치가 멀어도 보이고, 선단 채팅은 구성원만", async () => {
+  const a = await join_("flta"), b = await join_("fltb"), c = await join_("fltc");
+  await sync(a.tok, me({ name: "가", x: 5, y: 5 })); await sync(b.tok, me({ name: "나", x: 50, y: 35 })); await sync(c.tok, me({ name: "다", x: 20, y: 20 }));
+  assert.equal((await call("/api/fleet/create", { name: "<b>" }, a.tok)).status, 400);
+  assert.equal((await call("/api/fleet/invite", { username: "fltb" }, a.tok)).status, 400, "선단이 없으면 초대 못 함");
+  assert.equal((await call("/api/fleet/create", { name: "푸른 돛" }, a.tok)).status, 200);
+  assert.equal((await call("/api/fleet/create", { name: "또 하나" }, a.tok)).status, 400, "이미 선단에 있음");
+  assert.equal((await call("/api/fleet/invite", { username: "fltb" }, a.tok)).status, 200);
+  assert.equal((await call("/api/fleet/invite", { username: "fltb" }, a.tok)).status, 400, "중복 초대");
+  const sb = await sync(b.tok, me({ name: "나", x: 50, y: 35 }));
+  assert.equal(sb.fleet.invites[0].fleet, "푸른 돛");
+  assert.equal((await call("/api/fleet/respond", { id: sb.fleet.invites[0].id, accept: true }, b.tok)).status, 200);
+  const sa = await sync(a.tok, me({ name: "가", x: 5, y: 5 }));
+  assert.equal(sa.fleet.mine.members.length, 2);
+  const mb = sa.fleet.mine.members.find((m) => m.user === "fltb");
+  assert.equal(mb.x, 50, "멀리 있어도 위치가 보인다");
+  assert.ok(sa.chat["fleet:" + sa.fleet.mine.id], "선단 채팅 채널");
+  const fid = sa.fleet.mine.id;
+  assert.equal((await call("/api/chat", { channel: "fleet:" + fid, text: "다들 모여라" }, a.tok)).status, 200);
+  assert.equal((await call("/api/chat", { channel: "fleet:" + fid, text: "나도 끼자" }, c.tok)).status, 403, "구성원이 아니면 못 쓴다");
+  await new Promise((r) => setTimeout(r, 1100));
+  const sb2 = await sync(b.tok, me({ name: "나", x: 50, y: 35 }));
+  assert.ok(sb2.chat["fleet:" + fid].some((m) => m.text === "다들 모여라"));
+  assert.equal((await sync(c.tok, me({ name: "다" }))).fleet.mine, null, "다른 사람에겐 안 보인다");
+  // 선단장이 나가면 남은 사람이 이어받는다
+  assert.equal((await call("/api/fleet/leave", {}, a.tok)).status, 200);
+  assert.equal((await sync(b.tok, me({ name: "나" }))).fleet.mine.owner, b.id);
+  assert.equal((await call("/api/fleet/leave", {}, b.tok)).status, 200);
+  assert.equal((await call("/api/fleet/leave", {}, b.tok)).status, 400);
+});

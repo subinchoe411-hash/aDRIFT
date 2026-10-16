@@ -153,10 +153,10 @@ const dirs=["북","북동","동","남동","남","남서","서","북서"];
 function whereTxt(n){if(n.loc==="port")return "같은 부두";const dx=dl(n.x-S.x,WW),dy=dl(n.y-S.y,WH),a=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;return `${dirs[Math.round(a/45)%8]}쪽 ${n.d}해리`}
 function renderDock(){
   const d=dock(),on=O.on&&gameOn()&&O.data;d.hidden=!on;if(!on)return;
-  const r=O.data,inT=r.trades.incoming.length,inv=r.crew.invitesIn.length,badge=r.nearby.length+inT+inv;
+  const r=O.data,inT=r.trades.incoming.length,inv=r.crew.invitesIn.length,fin=r.fleet?r.fleet.invites.length:0,badge=r.nearby.length+inT+inv+fin;
   $("olbtn").textContent=`바다 위의 사람들${badge?` (${badge})`:""}`;
   $("olp").hidden=!dockOpen;if(!dockOpen)return;
-  const sig=JSON.stringify([r.nearby.map(n=>[n.id,n.loc]),r.trades,r.crew.captainOf,r.crew.invitesIn,r.crew.invitesOut,r.crew.me&&r.crew.me.purse]);
+  const sig=JSON.stringify([r.nearby.map(n=>[n.id,n.loc]),r.trades,r.crew.captainOf,r.crew.invitesIn,r.crew.invitesOut,r.crew.me&&r.crew.me.purse,r.fleet&&[r.fleet.invites,r.fleet.mine&&[r.fleet.mine.id,r.fleet.mine.members.map(m=>[m.id,m.online,m.loc])]]]);
   if(sig===nearSig){document.querySelectorAll("#olp [data-w]").forEach(e=>{const n=r.nearby.find(x=>x.id===+e.dataset.w);if(n)e.textContent=whereTxt(n)});return}
   nearSig=sig;
   const gs=id=>`<select onchange="Online.greetSel(${id},this)"><option value="">인사하기…</option>${GREET.map(g=>`<option>${esc(g)}</option>`).join("")}<option value="__c">직접 쓰기…</option></select>`;
@@ -168,6 +168,10 @@ function renderDock(){
    +r.crew.invitesOut.map(i=>`<div class="row sub sm"><span>초대 중: ${esc(i.memberName)}</span><a onclick="Online.cancelInvite(${i.id})">취소</a></div>`).join("")
    +`<div class="row" style="margin-top:6px"><input id="ci-name" placeholder="초대할 아이디" maxlength="16" style="flex:1;min-width:0" list="ci-dl"><datalist id="ci-dl">${r.roster.map(x=>`<option value="${esc(x.username)}">`).join("")}</datalist><button onclick="Online.invite()">초대</button></div>`;
   if(inv)h+=`<h2>선원 제안</h2>`+r.crew.invitesIn.map(i=>`<div class="seat"><b>${esc(i.captainName)}</b> 선장이 배에 타 달라고 한다.<div style="margin-top:6px"><button class="pri" onclick="Online.respond(${i.id},true)">수락</button><button onclick="Online.respond(${i.id},false)">거절</button></div><div class="sub sm">수락하면 타이틀 화면에서 '선원으로 탑승'할 수 있다.</div></div>`).join("");
+  {const F=r.fleet;if(F){h+=`<h2>선단</h2>`;
+    if(F.mine){const fm=F.mine;h+=`<div class="sm"><b>${esc(fm.name)}</b> <span class="sub">· ${fm.members.length}/6명 · 서로의 배가 해도에 보이고 선단 채팅을 쓴다</span></div>`+fm.members.map(m=>`<div class="row"><span>${m.online?"● ":"○ "}${esc(m.name)}${m.id===O.user.id?" (나)":""}${m.id===fm.owner?" ★":""} <span class="sub sm">${m.online?(m.loc==="sea"?"바다":m.loc==="port"?"항구":"해저"):"자리 비움"}${m.online&&m.id!==O.user.id&&typeof S!=="undefined"&&S&&m.x!=null?` · ${fleetDist(m)}해리`:""}</span></span></div>`).join("")+`<div class="row" style="margin-top:6px"><input id="fl-inv" placeholder="초대할 아이디" maxlength="16" style="flex:1;min-width:0" list="ci-dl"><button onclick="Online.fleetInvite()">초대</button></div><div style="margin-top:4px"><button onclick="Online.fleetLeave()">선단에서 나가기</button></div>`}
+    else h+=`<div class="sub sm">친구와 선단을 만들면 서로의 배가 어디에 있든 해도에 보이고, 선단 채팅을 쓸 수 있다.</div><div class="row" style="margin-top:6px"><input id="fl-new" placeholder="선단 이름 (2~12자)" maxlength="12" style="flex:1;min-width:0"><button onclick="Online.fleetCreate()">만들기</button></div>`;
+    h+=F.invites.map(i=>`<div class="seat"><b>${esc(i.from)}</b>의 선단 <b>${esc(i.fleet)}</b>에 초대받았다.<div style="margin-top:6px"><button class="pri" onclick="Online.fleetRespond(${i.id},true)">수락</button><button onclick="Online.fleetRespond(${i.id},false)">거절</button></div></div>`).join("")}}
   const pu=r.crew.me?r.crew.me.purse:0;if(pu>0)h+=`<h2>선원 월급</h2><div class="row"><span>${pu}G가 쌓여 있다</span><button onclick="Online.withdraw()">내 항해로 찾기</button></div>`;
   $("olp").innerHTML=h}
 const doit=async(fn,after)=>{try{await fn();after&&after()}catch(e){if(gameOn())say("※ "+esc(e.message));else toast(e.message)}O.syncNow()};
@@ -181,6 +185,12 @@ O.cancelInvite=id=>doit(()=>api("/crew/cancel",{id}));
 O.dismiss=id=>{if(confirm("이 선원을 배에서 내리게 할까요?"))doit(()=>api("/crew/dismiss",{id}))};
 O.respond=(id,accept)=>doit(()=>api("/crew/respond",{id,accept}),()=>{if(accept&&gameOn())say("※ 선원 제안을 받아들였다. 타이틀 화면에서 선원으로 탑승할 수 있다.")});
 O.withdraw=()=>doit(()=>api("/crew/withdraw",{}));
+const fleetDist=m=>{const dx=dl(m.x-S.x,WW),dy=dl(m.y-S.y,WH);return Math.hypot(dx,dy).toFixed(1)};
+O.fleet=()=>O.data&&O.data.fleet&&O.data.fleet.mine;
+O.fleetCreate=()=>{const n=$("fl-new").value.trim();if(n)doit(()=>api("/fleet/create",{name:n}),()=>say(`※ 선단 「${esc(n)}」을 만들었다.`))};
+O.fleetInvite=()=>{const u=$("fl-inv").value.trim();if(u)doit(()=>api("/fleet/invite",{username:u}),()=>say(`※ ${esc(u)}에게 선단 초대를 보냈다.`))};
+O.fleetRespond=(id,accept)=>doit(()=>api("/fleet/respond",{id,accept}),()=>{if(accept)say("※ 선단에 들어갔다. 선단 채팅과 해도에서 동료를 볼 수 있다.")});
+O.fleetLeave=()=>{if(confirm("선단에서 나갈까요?"))doit(()=>api("/fleet/leave",{}))};
 
 /* ---- 거래 제안 창 ---- */
 O.openTrade=to=>{
@@ -243,7 +253,7 @@ O.bossHit=async dmg=>{try{O.boss=await api("/boss/hit",{dmg:Math.max(1,Math.min(
 O.bossClaim=async()=>{try{await api("/boss/claim",{});O.bossPoll();O.syncNow()}catch(e){say("※ "+esc(e.message))}};
 /* ================= 채팅 ================= */
 const CH={world:[]};let curCh="world";const unread={};
-function chName(ch){return ch==="world"?"월드":ch.startsWith("place:")?"이곳":"선원"}
+function chName(ch){return ch==="world"?"월드":ch.startsWith("place:")?"이곳":ch.startsWith("fleet:")?"선단":"선원"}
 function chatAdd(ch,list){
   const a=CH[ch]||(CH[ch]=[]);
   for(const m of list){if(!a.some(x=>x.id===m.id)){a.push(m);if(ch!==curCh)unread[ch]=1}}
@@ -251,8 +261,8 @@ function chatAdd(ch,list){
 function myCrewCh(){const r=O.data;if(!r)return null;return r.crew.memberOf?"crew:"+r.crew.memberOf.captainId:(r.crew.captainOf.length?"crew:"+O.user.id:null)}
 function renderChat(){
   const box=$("chl");if(!box||!O.on)return;
-  const cc=myCrewCh(),pc=O.data&&O.data.place||null;if(curCh!=="world"&&curCh!==cc&&curCh!==pc)curCh="world";
-  const h=$("chh");if(h){h.innerHTML=`채팅 <span style="font-weight:400">`+[["world",1],[pc,!!pc],[cc,!!cc]].filter(x=>x[1]).map(([c])=>`<a onclick="Online.setCh('${c}')" style="${c===curCh?"font-weight:700":""}">${chName(c)}${unread[c]?" ●":""}</a>`).join("")+`</span>`}
+  const cc=myCrewCh(),pc=O.data&&O.data.place||null,fc=O.data&&O.data.fleet&&O.data.fleet.mine?"fleet:"+O.data.fleet.mine.id:null;if(curCh!=="world"&&curCh!==cc&&curCh!==pc&&curCh!==fc)curCh="world";
+  const h=$("chh");if(h){h.innerHTML=`채팅 <span style="font-weight:400">`+[["world",1],[pc,!!pc],[fc,!!fc],[cc,!!cc]].filter(x=>x[1]).map(([c])=>`<a onclick="Online.setCh('${c}')" style="${c===curCh?"font-weight:700":""}">${chName(c)}${unread[c]?" ●":""}</a>`).join("")+`</span>`}
   const list=(CH[curCh]||[]).slice().reverse();
   box.innerHTML=list.map(m=>`<div>[${esc(m.name)}] ${esc(m.text)}</div>`).join("")||`<div>(아직 아무도 말하지 않았다)</div>`}
 O.setCh=c=>{curCh=c;unread[c]=0;renderChat()};

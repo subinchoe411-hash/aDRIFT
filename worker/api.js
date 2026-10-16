@@ -397,11 +397,13 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
     P(env, "SELECT i.id,i.member_id,u.username memberName FROM crew_invites i JOIN users u ON u.id=i.member_id WHERE i.captain_id=? AND i.status='open' AND i.created>? LIMIT 10", user.id, t - 3 * DAY),
     P(env, "SELECT * FROM crew_profile WHERE user_id=?", user.id),
     P(env, "SELECT v FROM meta WHERE k='isn_ver'"),
+    P(env, "SELECT f.id,f.name,f.owner_id FROM fleet f JOIN fleet_member m ON m.fleet_id=f.id WHERE m.user_id=?", user.id),
+    P(env, "SELECT i.id,f.name fname,u.username fromName FROM fleet_invites i JOIN fleet f ON f.id=i.fleet_id JOIN users u ON u.id=i.from_id WHERE i.member_id=? AND i.status='open' AND i.created>? ORDER BY i.id DESC LIMIT 3", user.id, t - 3 * DAY),
   );
   let sto = null;
   if (body.sto && typeof body.sto === "object") sto = await stoSync(env, user.id, body.sto);
   const r1 = (await env.DB.batch(stm)).slice(o).map((x) => x.results || []);
-  const [mineR, crewR, candR, rosterR, delivR, tinR, toutR, membersR, invInR, invOutR, profR, isnR] = r1;
+  const [mineR, crewR, candR, rosterR, delivR, tinR, toutR, membersR, invInR, invOutR, profR, isnR, fleetR, fleetInvR] = r1;
   const mine = mineR[0], crewRow = crewR[0], p = profR[0];
 
   const nearby = [];
@@ -419,7 +421,8 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   const myShip = crewRow ? crewRow.captain_id : user.id;
   // 같은 섬(부두·상륙 중)에 있는 사람끼리의 채팅
   const place = mine && mine.loc === "port" && mine.isl >= 0 && t - mine.updated < FRESH * 2 ? "place:" + mine.isl : null;
-  const chans = ["world", "crew:" + myShip, ...(place ? [place] : [])];
+  const fl = fleetR[0] || null;
+  const chans = ["world", "crew:" + myShip, ...(place ? [place] : []), ...(fl ? ["fleet:" + fl.id] : [])];
   const since = body.since && typeof body.since === "object" ? body.since : {};
   const stm2 = chans.map((ch) => typeof since[ch] === "number"
     ? P(env, "SELECT id,user_id uid,name,text,ts FROM chat WHERE channel=? AND id>? ORDER BY id LIMIT 60", ch, since[ch])
@@ -436,6 +439,11 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   // 섬 이름 목록은 바뀐 때만 보낸다 (매 동기화마다 80줄을 읽지 않도록 버전 한 줄만 비교)
   let isn;
   { const v = isnR[0] ? String(isnR[0].v) : "0"; if (String(body.isnv || "0") !== v) isn = { v, list: await all(env, "SELECT isl,name,uname FROM island_names ORDER BY isl") }; }
+  let fleet = { invites: fleetInvR.map((r) => ({ id: r.id, fleet: r.fname, from: r.fromName })), mine: null };
+  if (fl) {
+    const ms = await all(env, "SELECT m.user_id id,u.username,p.name,p.ship,p.x,p.y,p.hd,p.loc,p.isl,p.updated FROM fleet_member m JOIN users u ON u.id=m.user_id LEFT JOIN presence p ON p.user_id=m.user_id WHERE m.fleet_id=? ORDER BY m.joined", fl.id);
+    fleet.mine = { id: fl.id, name: fl.name, owner: fl.owner_id, members: ms.map((r) => ({ id: r.id, name: r.name || r.username, user: r.username, ship: r.ship, x: r.x, y: r.y, hd: r.hd, loc: r.loc, isl: r.isl, online: !!(r.updated && t - r.updated < FRESH * 2), age: r.updated ? t - r.updated : null })) };
+  }
   const crew = { captainOf: [], memberOf: null, invitesIn: invInR, invitesOut: invOutR, me: null };
   crew.captainOf = membersR.map((r) => ({ id: r.id, name: r.cname || r.username, online: !!(r.seen && t - r.seen < FRESH * 2), role: r.role || "", rank: rankOf(r.xp || 0), xp: r.xp || 0, tasks: r.tasks || 0, joined: r.joined, last: r.seen || 0 }));
   let cd = {};
@@ -455,7 +463,7 @@ route("POST", "/api/sync", async ({ env, user, body }) => {
   }
 
   return {
-    now: t, nearby, chat, crew, radius: R, roster: rosterR, place, isn,
+    now: t, nearby, chat, crew, radius: R, roster: rosterR, place, isn, fleet,
     sto: sto ? { items: sto.items, cap: sto.cap, seq: sto.seq } : undefined,
     deliveries: delivR.map((d) => ({ ...d, payload: json(d.payload) })),
     trades: {
@@ -597,7 +605,10 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const text = cleanStr(body.text, 80);
   if (!text) throw bad("내용이 비었습니다.");
   const ch = String(body.channel || "world");
-  if (ch.startsWith("place:")) {
+  if (ch.startsWith("fleet:")) {
+    const m = /^fleet:(\d+)$/.exec(ch), fl = m && await fleetOf(env, user.id);
+    if (!fl || fl.id !== Number(m[1])) throw new HttpError(403, "그 선단의 채팅에 참여할 수 없습니다.");
+  } else if (ch.startsWith("place:")) {
     const n = /^place:(\d{1,3})$/.exec(ch);
     const pr = n && await first(env, "SELECT loc,isl,updated FROM presence WHERE user_id=?", user.id);
     if (!pr || pr.loc !== "port" || pr.isl !== Number(n[1]) || now() - pr.updated > 120_000) throw new HttpError(403, "그 장소에 있지 않습니다.");
@@ -611,7 +622,7 @@ route("POST", "/api/chat", async ({ env, user, body }) => {
   const p = await first(env, "SELECT name,updated FROM presence WHERE user_id=?", user.id);
   let nm = p ? p.name : user.username;
   // 선원 화면에서 말할 때(배 위치 신호가 없을 때)는 선원 캐릭터 이름으로
-  if (!p || now() - p.updated > 120_000 || (ch !== "world" && !ch.startsWith("place:"))) {
+  if (!p || now() - p.updated > 120_000 || (ch !== "world" && !ch.startsWith("place:") && !ch.startsWith("fleet:"))) {
     const cp = await first(env, "SELECT cname FROM crew_profile WHERE user_id=?", user.id);
     if (cp && cp.cname && (await crewRowOf(env, user.id))) nm = cp.cname;
   }
@@ -851,6 +862,54 @@ route("POST", "/api/boss/claim", async ({ env, user }) => {
   ]);
   if (changes(res[0]) !== 1) throw bad("이미 보상을 받았습니다.");
   return { ok: true, gold, loot };
+});
+
+
+/* ===== 선단: 최대 6명. 서로의 배가 (가까이 없어도) 지도에 보이고, 선단 채팅을 쓴다 ===== */
+const FLEET_MAX = 6;
+const fleetOf = (env, uid) => first(env, "SELECT f.id,f.name,f.owner_id FROM fleet f JOIN fleet_member m ON m.fleet_id=f.id WHERE m.user_id=?", uid);
+route("POST", "/api/fleet/create", async ({ env, user, body }) => {
+  await limit(env, "fcre:" + user.id, 5, 3_600_000);
+  const name = String(body.name || "").trim().replace(/\s+/g, " ");
+  if (!/^[가-힣A-Za-z0-9 ]{2,12}$/.test(name)) throw bad("선단 이름은 한글·영문·숫자 2~12자로 지어 주세요.");
+  if (await fleetOf(env, user.id)) throw bad("이미 선단에 속해 있습니다.");
+  const r = await run(env, "INSERT INTO fleet(name,owner_id,created) VALUES(?,?,?)", name, user.id, now());
+  await run(env, "INSERT INTO fleet_member(user_id,fleet_id,joined) VALUES(?,?,?)", user.id, r.meta.last_row_id, now());
+  return { ok: true, id: r.meta.last_row_id };
+});
+route("POST", "/api/fleet/invite", async ({ env, user, body }) => {
+  await limit(env, "finv:" + user.id, 10, 60_000);
+  const f = await fleetOf(env, user.id);
+  if (!f) throw bad("먼저 선단을 만드세요.");
+  const target = await first(env, "SELECT id FROM users WHERE username=?", String(body.username || "").trim());
+  if (!target || target.id === user.id) throw bad("초대할 수 없는 아이디입니다.");
+  if (await first(env, "SELECT 1 x FROM fleet_member WHERE user_id=?", target.id)) throw bad("그 사람은 이미 다른 선단에 있습니다.");
+  if ((await first(env, "SELECT COUNT(*) n FROM fleet_member WHERE fleet_id=?", f.id)).n >= FLEET_MAX) throw bad(`선단은 최대 ${FLEET_MAX}명까지입니다.`);
+  if (await first(env, "SELECT 1 x FROM fleet_invites WHERE fleet_id=? AND member_id=? AND status='open' AND created>?", f.id, target.id, now() - 3 * DAY)) throw bad("이미 초대했습니다.");
+  await run(env, "INSERT INTO fleet_invites(fleet_id,from_id,member_id,created,status) VALUES(?,?,?,?,'open')", f.id, user.id, target.id, now());
+  return { ok: true };
+});
+route("POST", "/api/fleet/respond", async ({ env, user, body }) => {
+  const id = Math.floor(num(body.id, 1, 1e12, 0));
+  const inv = await first(env, "SELECT * FROM fleet_invites WHERE id=? AND member_id=? AND status='open' AND created>?", id, user.id, now() - 3 * DAY);
+  if (!inv) throw bad("초대가 없거나 만료되었습니다.");
+  if (!body.accept) { await run(env, "UPDATE fleet_invites SET status='no' WHERE id=?", id); return { ok: true }; }
+  if (await fleetOf(env, user.id)) throw bad("이미 선단에 속해 있습니다.");
+  // 정원 확인과 가입을 한 문장으로 (동시에 수락해도 6명을 넘지 않게)
+  const r = await run(env, "INSERT INTO fleet_member(user_id,fleet_id,joined) SELECT ?1,?2,?3 WHERE (SELECT COUNT(*) FROM fleet_member WHERE fleet_id=?2)<?4", user.id, inv.fleet_id, now(), FLEET_MAX);
+  if (changes(r) !== 1) throw bad("선단이 가득 찼습니다.");
+  await run(env, "UPDATE fleet_invites SET status='yes' WHERE id=?", id);
+  return { ok: true };
+});
+route("POST", "/api/fleet/leave", async ({ env, user }) => {
+  const f = await fleetOf(env, user.id);
+  if (!f) throw bad("선단에 속해 있지 않습니다.");
+  await run(env, "DELETE FROM fleet_member WHERE user_id=?", user.id);
+  // 마지막 사람이 나가면 선단을 지우고, 선단장이 나가면 가장 먼저 들어온 사람이 이어받는다
+  const rest = await first(env, "SELECT user_id FROM fleet_member WHERE fleet_id=? ORDER BY joined LIMIT 1", f.id);
+  if (!rest) await run(env, "DELETE FROM fleet WHERE id=?", f.id);
+  else if (f.owner_id === user.id) await run(env, "UPDATE fleet SET owner_id=? WHERE id=?", rest.user_id, f.id);
+  return { ok: true };
 });
 
 /* ---------- 관리자: 초대 코드 발급 ---------- */
