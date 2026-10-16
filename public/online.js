@@ -93,8 +93,10 @@ async function sync(){
   try{
     const active=gameOn();
     const so=active?O.stoOut():undefined;
-    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined,sto:so});
+    const r=await api("/sync",{me:active?myState():undefined,since,crew:O.crewMode?true:undefined,sto:so,isnv:O.isnv});
     O.data=r;O.off=r.now-Date.now();ok=true;
+    if(r.isn){O.isnv=r.isn.v;O.isn=r.isn.list;reNames()}
+    if(active&&!O._bp){O._bp=1;bossPoll()}
     if(active&&so)O.stoIn(r,so);
     for(const ch in r.chat){const a=r.chat[ch];if(a.length)since[ch]=a[a.length-1].id;chatAdd(ch,a)}
     if(active)await takeDeliveries(r.deliveries);else if(O.crewMode&&O.crewDeliveries)await O.crewDeliveries(r.deliveries);
@@ -126,6 +128,7 @@ function applyOne(d){
   case "trade_done":{const paid=take(p.cost||{gold:0,items:{}});gain(p.gain||{gold:0,items:{}});
     say(`※ ${esc(p.with)}와(과)의 거래가 성사되었다. 받은 것: ${fmtB(p.gain||{})}${(p.cost&&(p.cost.gold||Object.keys(p.cost.items||{}).length))?` / 건넨 것: ${fmtB(p.cost)}`:""}${paid?"":" (내놓을 것이 모자라 있는 만큼만 건넸다)"}`);break}
   case "trade_refund":gain(p.gain||{});say(`※ ${esc(p.why||"거래가 취소되었다")}. 맡겨 둔 ${fmtB(p.gain||{})}이(가) 돌아왔다.`);break;
+  case "boss_reward":gain({gold:p.gold,items:p.items});say(`※ ${esc(p.text||"주간 보스 보상이 도착했다.")} 골드 ${Math.floor(+p.gold||0)}${Object.keys(p.items||{}).length?", "+Object.keys(p.items).map(esc).join(", "):""}`);fxBig("주간 보스 보상","함께 쓰러뜨린 보상이 도착했다","relic");break;
   case "purse":S.gold+=Math.floor(+p.gold||0);say(`※ 선원 월급 ${Math.floor(+p.gold||0)}G를 찾았다.`);break;
   case "bottle_found":{const b=S.out.find(x=>x.srv&&!x.r);if(b)b.r=1;say("※ 누군가 당신의 병 편지를 주웠다!");break}
   case "bottle_reply":S.mail.unshift({from:cleanStr(p.from,30),text:cleanStr(p.text,80),t:clock(),re:cleanStr(p.re,80)});S.mail.length=Math.min(S.mail.length,40);
@@ -211,17 +214,33 @@ O.sendTrade=async to=>{
   O.syncNow()};
 
 /* ================= 병 편지 ================= */
-O.sendBottle=async text=>{try{await api("/bottle/send",{text})}catch(e){const b=S.out.find(x=>x.srv&&!x.r&&x.text===text);if(b)b.srv=0;say("(서버에 띄우지 못했다: "+esc(e.message)+" — 이 병은 파도가 알아서 데려간다)")}};
+O.sendBottle=async(text,gift)=>{try{await api("/bottle/send",{text,gift:gift||undefined})}catch(e){if(gift)add(gift.k,gift.n);const b=S.out.find(x=>x.srv&&!x.r&&x.text===text);if(b)b.srv=0;say("(서버에 띄우지 못했다: "+esc(e.message)+" — 이 병은 파도가 알아서 데려간다)")}};
 O.pickBottle=async()=>{
   try{const r=await api("/bottle/find",{});
     if(r.bottle){S.mail.unshift({from:cleanStr(r.bottle.from,30),text:cleanStr(r.bottle.text,80),t:clock(),bid:r.bottle.id});S.mail.length=Math.min(S.mail.length,40);
-      say(`※ 누군가 띄운 병이다. <b>${esc(r.bottle.from)}</b>: “${esc(r.bottle.text)}” (선장실에서 답장할 수 있다)`);renderAll();return}}catch(e){}
+      say(`※ 누군가 띄운 병이다. <b>${esc(r.bottle.from)}</b>: “${esc(r.bottle.text)}” (선장실에서 답장할 수 있다)`);
+      const g=r.bottle.gift;if(g&&knownItem(g.k)){add(g.k,Math.min(3,g.n|0)||1);say(`※ 병 속에 <b>${esc(g.k)}</b>이(가) 들어 있었다!`);fxBig("병 속의 선물",g.k,"ok")}renderAll();return}}catch(e){}
   const bb=pick(BOT);S.mail.unshift({from:bb[0],text:bb[1],t:clock()});S.mail.length=Math.min(S.mail.length,40);
   say(`※ ${esc(bb[0])}: “${esc(bb[1])}” ${bb[2]?fx(bb[2]):""}`);renderAll()};
 O.reply=async bid=>{
   const t=prompt("답장 (60자)","");if(!t)return;const m=S.mail.find(x=>x.bid===bid);
   try{await api("/bottle/reply",{id:bid,text:t.slice(0,60)});if(m)m.rp=1;say("※ 답장을 병에 담아 바다에 띄웠다.");renderAll();saveGame()}catch(e){say("※ "+esc(e.message))}};
 
+
+/* ================= 섬 이름 · 주간 보스 ================= */
+function reNames(){if(!O.isn||typeof I==="undefined"||!I||!I.length)return;O.isn.forEach(x=>{const w=I[x.isl];if(w){if(w.n0===undefined)w.n0=w.n;w.n=x.name;w.by=x.uname}});if(typeof renderAll==="function"&&gameOn())renderAll()}
+O.reNames=reNames;
+O.nameIsland=async()=>{const el=$("isnm"),name=el?el.value.trim():"";if(!name||S.isl===null)return;
+  try{await api("/island/name",{isl:S.isl,name});say(`※ 이 섬에 「${esc(name)}」이라는 이름을 붙였다. 모두의 해도에 남는다.`);fxBig("섬 이름",name,"relic");O.syncNow()}catch(e){say("※ "+esc(e.message))}};
+const _gw=window.genWorld;if(_gw)window.genWorld=function(){const r=_gw.apply(this,arguments);try{reNames()}catch(e){}return r};
+async function bossPoll(){if(!O.on||!gameOn())return;try{O.boss=await api("/boss");if(typeof rGoals==="function")rGoals()}catch(e){}}
+setInterval(bossPoll,60000);O.bossPoll=bossPoll;
+O.bossHTML=()=>{const b=O.boss;if(!b||!O.on)return "";const left=Math.max(0,b.hp-b.dmg),pc=Math.round(left/b.hp*100),can=typeof S!=="undefined"&&S&&S.isl===null&&!S.inC&&!S.bt&&!S.act&&!S.pend;
+  return `<h3>이번 주 해역 보스</h3><div class="row"><span><b>${esc(b.name)}</b></span><span class="sub sm">남은 체력 ${left} / ${b.hp}</span></div><div class="bar${pc<25?" w":""}"><i style="width:${pc}%"></i></div><div class="sub sm">모두의 피해가 합산된다 · 참여 ${b.fighters}명 · 내 피해 ${b.mine}</div>`+
+   (b.done?(b.mine>0&&!b.claimed?`<button class="pri" onclick="Online.bossClaim()">쓰러뜨린 보상 받기</button>`:`<div class="sub sm">${b.mine>0?"보상을 받았다.":"이번 주 보스는 쓰러졌다."} 다음 주(월요일 0시)에 새 보스가 나타난다.</div>`):`<button class="pri" onclick="Online.bossFight()" ${can?"":"disabled"}>보스에게 도전 (바다에서)</button>`)};
+O.bossFight=()=>{const b=O.boss;if(!b||b.done||S.isl!==null||S.inC||S.bt)return;MON.wboss=WBOSS[b.kind]||WBOSS[0];startBattle("wboss")};
+O.bossHit=async dmg=>{try{O.boss=await api("/boss/hit",{dmg:Math.max(1,Math.min(400,dmg))});say(`※ ${esc(O.boss.name)}에게 입힌 피해 ${dmg}이(가) 모두의 합산에 더해졌다. (남은 체력 ${Math.max(0,O.boss.hp-O.boss.dmg)})`);if(O.boss.done)fxBig("보스 격파","모두의 힘으로 쓰러뜨렸다","relic");rGoals()}catch(e){say("※ "+esc(e.message))}};
+O.bossClaim=async()=>{try{await api("/boss/claim",{});O.bossPoll();O.syncNow()}catch(e){say("※ "+esc(e.message))}};
 /* ================= 채팅 ================= */
 const CH={world:[]};let curCh="world";const unread={};
 function chName(ch){return ch==="world"?"월드":ch.startsWith("place:")?"이곳":"선원"}

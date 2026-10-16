@@ -26,9 +26,11 @@ const call = async (path, body, tok, method) => {
   });
   return { status: r.status, ...(await r.json()) };
 };
+let spare = [];
 const join_ = async (name) => {
-  const { codes } = await call("/api/admin/invites", { count: 1 });
-  const r = await call("/api/register", { code: codes[0], username: name, password: "secret1" });
+  // 관리자 API 는 10분에 30번까지라서 초대 코드를 20개씩 받아 두고 쓴다
+  if (!spare.length) spare = (await call("/api/admin/invites", { count: 20 })).codes;
+  const r = await call("/api/register", { code: spare.pop(), username: name, password: "secret1" });
   assert.equal(r.status, 200, JSON.stringify(r));
   return { tok: r.token, id: r.user.id };
 };
@@ -313,4 +315,55 @@ test("선원 월급 받기: 한 번만, 지갑으로 옮겨진다", async () => 
   assert.equal(rs.filter((x) => x.status === 200).length, 1, "동시에 눌러도 한 번만");
   assert.equal(rs.find((x) => x.status === 200).gold, pu);
   assert.equal((await sync(mate.tok, me({}))).crew.me.purse, 0);
+});
+
+test("병 편지 선물: 주운 사람에게만 한 번", async () => {
+  const a = await join_("gifta"), b = await join_("giftb");
+  await sync(a.tok, me({}));
+  assert.equal((await call("/api/bottle/send", { text: "선물 받아요", gift: { k: "<b>", n: 1 } }, a.tok)).status, 400, "이상한 물건 이름");
+  assert.equal((await call("/api/bottle/send", { text: "선물 받아요", gift: { k: "소금", n: 9 } }, a.tok)).status, 200);
+  const f = await call("/api/bottle/find", {}, b.tok);
+  assert.equal(f.bottle.text, "선물 받아요");
+  assert.deepEqual(f.bottle.gift, { k: "소금", n: 3 }, "개수는 최대 3개로 줄어든다");
+  assert.equal((await call("/api/bottle/find", {}, b.tok)).bottle, null, "같은 병은 다시 못 줍는다");
+});
+
+test("섬 이름: 그 섬에 닿은 사람만, 한 섬에 한 번만, 바뀐 때만 목록이 온다", async () => {
+  const a = await join_("isna"), b = await join_("isnb"), far = await join_("isnc");
+  const at = (n) => me({ loc: "port", isl: n });
+  await sync(a.tok, at(7)); await sync(b.tok, at(7)); await sync(far.tok, me({ loc: "sea" }));
+  assert.equal((await call("/api/island/name", { isl: 7, name: "푸른 만" }, far.tok)).status, 400, "바다에 있으면 안 된다");
+  assert.equal((await call("/api/island/name", { isl: 7, name: "<b>" }, a.tok)).status, 400, "이름 형식");
+  assert.equal((await call("/api/island/name", { isl: 7, name: "푸른 만" }, a.tok)).status, 200);
+  assert.equal((await call("/api/island/name", { isl: 7, name: "붉은 만" }, b.tok)).status, 400, "이미 이름이 있다");
+  const s1 = await call("/api/sync", { me: at(7), isnv: "0" }, b.tok);
+  assert.equal(s1.isn.list.find((x) => x.isl === 7).name, "푸른 만");
+  assert.match(s1.isn.list.find((x) => x.isl === 7).uname, /선장/);
+  const s2 = await call("/api/sync", { me: at(7), isnv: s1.isn.v }, b.tok);
+  assert.equal(s2.isn, undefined, "같은 버전이면 목록을 다시 보내지 않는다");
+});
+
+test("주간 보스: 피해 합산, 쓰러뜨리면 참여자가 한 번씩 보상", async () => {
+  const a = await join_("bossa"), b = await join_("bossb"), c = await join_("bossc");
+  const st0 = await call("/api/boss", undefined, a.tok);
+  assert.equal(st0.hp, 3000); assert.ok(st0.name);
+  assert.equal((await call("/api/boss/hit", { dmg: 9999 }, a.tok)).dmg, 400, "한 번에 최대 400");
+  assert.equal((await call("/api/boss/hit", { dmg: 10 }, a.tok)).status, 429, "15초에 한 번");
+  assert.equal((await call("/api/boss/hit", { dmg: 100 }, b.tok)).dmg, 500, "서로의 피해가 합산");
+  assert.equal((await call("/api/boss/claim", {}, a.tok)).status, 400, "쓰러지기 전엔 보상 없음");
+  // 쓰러질 때까지 (서로 다른 사람이 번갈아, 속도 제한을 피해 여러 계정 사용)
+  const users = [a, b, c];
+  for (let i = 0; i < 12 && !(await call("/api/boss", undefined, a.tok)).done; i++) {
+    const u = await join_("bossx" + i);
+    users.push(u);
+    await call("/api/boss/hit", { dmg: 400 }, u.tok);
+  }
+  const fin = await call("/api/boss", undefined, a.tok);
+  assert.equal(fin.done, true); assert.equal(fin.dmg, 3000, "남은 체력까지만 합산");
+  const late = await join_("bossy"); assert.equal((await call("/api/boss/hit", { dmg: 50 }, late.tok)).status, 400, "이미 쓰러짐");
+  assert.equal((await call("/api/boss/claim", {}, c.tok)).status, 400, "참여하지 않으면 보상 없음");
+  const rs = await Promise.all([call("/api/boss/claim", {}, a.tok), call("/api/boss/claim", {}, a.tok)]);
+  assert.equal(rs.filter((x) => x.status === 200).length, 1, "동시에 눌러도 한 번만");
+  const d = (await sync(a.tok, me({}))).deliveries.find((x) => x.kind === "boss_reward");
+  assert.ok(d && d.payload.gold >= 200 && Object.keys(d.payload.items).length === 1);
 });
